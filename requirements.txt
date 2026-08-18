@@ -1,0 +1,10 @@
+numpy
+rasterio
+pystac-client
+planetary-computer
+pyproj
+pyyaml
+requests
+
+# Optional — only needed for provider: gee
+# earthengine-api

@@ -1,0 +1,28 @@
+# Annual cloud-masked median composite, Landsat only, NBR index.
+# Run: python -m data_loader --config examples/annual_composite.yaml
+
+aoi:
+  upper_left: [-122.4327, 44.28595]   # [lon, lat] Oregon Coast Range test AOI
+  lower_right: [-122.34258, 44.23148]  # [lon, lat]
+
+provider: planetary_computer  # planetary_computer | aws_earth_search | gee | usgs_m2m
+
+sensors:
+  - name: landsat  # resolution_m defaults to 30
+
+date_range:
+  start: "2023-05-01"
+  end: "2026-08-10"
+  season_start: "05-01"
+  season_end: "08-10"
+
+filters:
+  max_cloud_percent: 60
+  pixel_cloud_mask: true
+
+temporal_mode: annual_composite
+reduce: median
+
+output:
+  indices: [nbr]
+  dir: output/annual_composite

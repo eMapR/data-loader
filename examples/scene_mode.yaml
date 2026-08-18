@@ -1,0 +1,31 @@
+# Every individual cloud-filtered scene (no compositing), raw bands +
+# NDVI, for time-series/per-date work.
+# Run: python -m data_loader --config examples/scene_mode.yaml
+
+aoi:
+  upper_left: [-123.855, 45.896]   # [lon, lat]
+  lower_right: [-123.835, 45.882]  # [lon, lat]
+
+# aws_earth_search's Sentinel-2 mirror is free/anonymous (public https
+# bucket); its Landsat mirror is a Requester Pays S3 bucket and needs a
+# real AWS account — use provider: planetary_computer for free Landsat.
+provider: aws_earth_search
+
+sensors:
+  - name: sentinel2
+
+date_range:
+  start: "2020-06-01"
+  end: "2020-09-15"
+  # no season_start/season_end — start/end above is the whole window
+
+filters:
+  max_cloud_percent: 40
+  pixel_cloud_mask: true
+
+temporal_mode: scene
+
+output:
+  bands: [red, nir]
+  indices: [ndvi]
+  dir: output/scene_mode
