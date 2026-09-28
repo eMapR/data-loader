@@ -54,7 +54,9 @@ Other live-verified facts:
 - Bands `blue`/`green`/`red`/`nir08`/`swir16`/`swir22`/`qa_pixel` use the
   SAME canonical STAC asset keys as Planetary Computer/Earth Search, and
   (checked directly) are identical across TM/ETM (Landsat 4/5/7) and OLI
-  (Landsat 8/9) ARD items -- unlike GEE, no per-sensor band map is needed.
+  (Landsat 8/9) ARD items. The underlying band FILES that M2M serves are
+  not: they use each sensor's native band numbers, so reads go through a
+  per-sensor suffix map (see BAND_FILE_SUFFIX_BY_SENSOR).
 - QA_PIXEL is the standard Collection 2 bitmask, so
   `masking.landsat_qa_mask` applies unchanged.
 - Grid: fixed national Albers Equal-Area Conic ARD grid, 5000x5000px at
@@ -103,15 +105,38 @@ RELOGIN_AFTER = 90 * 60
 
 # Canonical DataLoader band name -> the file suffix of that band's ARD COG.
 # ARD files are named <tile_product_id>_<suffix>, e.g.
-# LC09_CU_003004_20230909_20230914_02_SR_B2.TIF. Band numbering is OLI's
-# (B2=blue..B7=swir2); TM/ETM ARD tiles use the SAME SR_B* numbering rather
-# than their sensors' native band numbers -- verified live against a
-# Landsat 5 and a Landsat 7 tile, so no per-sensor map is needed.
-BAND_FILE_SUFFIX = {
+# LC09_CU_003004_20230909_20230914_02_SR_B2.TIF. Band numbers are each
+# sensor's NATIVE numbers, so the map is per sensor: OLI/OLI-2 (Landsat 8/9)
+# use B2=blue..B7=swir2, while TM/ETM+ (Landsat 4/5/7) use B1=blue..B5=swir1,
+# B7=swir2 and have no SR_B6 (TM/ETM+ band 6 is thermal, shipped as ST_B6).
+# Verified live 2026-09-28 against M2M download-options file lists for
+# LT04/LT05/LE07/LC08 tiles of h003v004. (An earlier version of this map
+# assumed OLI numbering for every sensor, which made TM/ETM+ reads either
+# fail on the missing SR_B6 or -- without swir1 -- silently return the
+# wrong bands.)
+_OLI_SUFFIX = {
     "blue": "SR_B2", "green": "SR_B3", "red": "SR_B4",
     "nir": "SR_B5", "swir1": "SR_B6", "swir2": "SR_B7",
     "qa": "QA_PIXEL",
 }
+_TM_ETM_SUFFIX = {
+    "blue": "SR_B1", "green": "SR_B2", "red": "SR_B3",
+    "nir": "SR_B4", "swir1": "SR_B5", "swir2": "SR_B7",
+    "qa": "QA_PIXEL",
+}
+BAND_FILE_SUFFIX_BY_SENSOR = {
+    "LT04": _TM_ETM_SUFFIX, "LT05": _TM_ETM_SUFFIX, "LE07": _TM_ETM_SUFFIX,
+    "LC08": _OLI_SUFFIX, "LC09": _OLI_SUFFIX,
+}
+
+
+def band_file_suffixes(scene_or_tile_id: str) -> dict[str, str]:
+    """Canonical band name -> ARD file suffix for the sensor that produced
+    this tile (the first 4 characters of its id, e.g. "LT05")."""
+    try:
+        return BAND_FILE_SUFFIX_BY_SENSOR[scene_or_tile_id[:4]]
+    except KeyError:
+        raise ValueError(f"[usgs_ard] unknown Landsat sensor prefix in {scene_or_tile_id!r}") from None
 SR_SCALE, SR_OFFSET = 2.75e-5, -0.2
 
 # ARD tile product id, e.g. "LC09_CU_003004_20230909_20230914_02":
@@ -509,9 +534,10 @@ class UsgsArdProvider:
         from data_loader.providers.stac_common import _looks_like_expired_auth
 
         tile_product_id = _tile_product_id(scene.id)
-        needed = [BAND_FILE_SUFFIX[b] for b in bands]
+        suffix_for = band_file_suffixes(tile_product_id)
+        needed = [suffix_for[b] for b in bands]
         if pixel_cloud_mask:
-            needed = needed + [BAND_FILE_SUFFIX["qa"]]
+            needed = needed + [suffix_for["qa"]]
 
         def read_asset(suffix, resampling):
             # One re-mint attempt: signed URLs are short-lived, so a long
@@ -537,11 +563,11 @@ class UsgsArdProvider:
 
         out: dict[str, np.ndarray] = {}
         for b in bands:
-            dn = read_asset(BAND_FILE_SUFFIX[b], Resampling.bilinear)
+            dn = read_asset(suffix_for[b], Resampling.bilinear)
             out[b] = dn.astype("f4") * SR_SCALE + SR_OFFSET
 
         if pixel_cloud_mask:
-            qa = read_asset(BAND_FILE_SUFFIX["qa"], Resampling.nearest)
+            qa = read_asset(suffix_for["qa"], Resampling.nearest)
             bad = landsat_qa_mask(qa)
             for arr in out.values():
                 arr[bad] = np.nan

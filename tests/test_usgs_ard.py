@@ -11,6 +11,7 @@ live on 2026-09-18 (see the provider module docstring).
 from __future__ import annotations
 
 import sys
+import re
 import unittest
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -475,7 +476,7 @@ class ReadSceneBandsTests(unittest.TestCase):
                 return arr
             return np.full((2, 2), 10000, dtype="uint16")
 
-    def _patched_read(self, provider, bands, pixel_cloud_mask):
+    def _patched_read(self, provider, bands, pixel_cloud_mask, scene=None):
         opened = []
 
         def fake_open(path):
@@ -492,8 +493,31 @@ class ReadSceneBandsTests(unittest.TestCase):
         with patch.object(UsgsArdProvider, "_signed_band_urls", side_effect=fake_urls), \
              patch("rasterio.open", side_effect=fake_open), \
              patch("rasterio.vrt.WarpedVRT", self._FakeVRT):
-            out = provider.read_scene_bands(_scene(), "landsat", bands, _grid(), pixel_cloud_mask)
+            out = provider.read_scene_bands(scene or _scene(), "landsat", bands, _grid(), pixel_cloud_mask)
         return out, opened
+
+    def test_band_files_use_each_sensors_native_numbering(self):
+        # TM/ETM+ ARD tiles (Landsat 4/5/7) have SR_B1..B5 + SR_B7 and no
+        # SR_B6; OLI (Landsat 8/9) has SR_B2..B7. Mapping every sensor with
+        # OLI numbers made TM/ETM+ reads fail (SR_B6) or read wrong bands.
+        six = ["blue", "green", "red", "nir", "swir1", "swir2"]
+        cases = {
+            "LT05_CU_003004_19950718_20210424_02_SR": ["SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B7"],
+            "LE07_CU_003004_20010719_20210426_02_SR": ["SR_B1", "SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B7"],
+            "LC08_CU_003004_20160711_20210502_02_SR": ["SR_B2", "SR_B3", "SR_B4", "SR_B5", "SR_B6", "SR_B7"],
+        }
+        for item_id, expected in cases.items():
+            with self.subTest(sensor=item_id[:4]):
+                scene = SceneRef(id=item_id, date=date(2000, 1, 1), cloud_percent=0.0,
+                                 handle=_ard_item(item_id=item_id))
+                _, opened = self._patched_read(UsgsArdProvider(username="u", token="t"), six, True, scene)
+                suffixes = [re.search(r"_(SR_B\d|QA_PIXEL)\.TIF", p).group(1) for p in opened]
+                self.assertEqual(suffixes, expected + ["QA_PIXEL"])
+
+    def test_unknown_sensor_prefix_is_rejected(self):
+        from data_loader.providers.usgs_ard import band_file_suffixes
+        with self.assertRaises(ValueError):
+            band_file_suffixes("LM05_CU_003004_19850101_20210101_02")
 
     def test_reads_through_vsicurl_and_applies_scale_offset(self):
         provider = UsgsArdProvider(username="u", token="t")
