@@ -1,13 +1,15 @@
 """Provider registry: config's `provider: <name>` string -> factory."""
 from __future__ import annotations
 
-from data_loader.providers import aws_earth_search, gee, planetary_computer, usgs_m2m
+from data_loader.providers import aws_earth_search, gee, glad_ard, planetary_computer, usgs_ard, usgs_m2m
 
 FACTORIES = {
     "planetary_computer": planetary_computer.make_provider,
     "aws_earth_search": aws_earth_search.make_provider,
     "gee": gee.make_provider,
     "usgs_m2m": usgs_m2m.make_provider,
+    "glad_ard": glad_ard.make_provider,
+    "usgs_ard": usgs_ard.make_provider,
 }
 
 

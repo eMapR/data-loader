@@ -6,6 +6,7 @@ sentinel-2-l2a -> B02/B03/B04/B08/B11/B12/SCL.
 """
 from __future__ import annotations
 
+from data_loader.product_contract import ESA_S2_L2A, USGS_C2_L2
 from data_loader.providers.stac_common import SensorStacSpec, StacConfig, StacProvider
 
 CONFIG = StacConfig(
@@ -15,6 +16,7 @@ CONFIG = StacConfig(
     sensors={
         "landsat": SensorStacSpec(
             collection="landsat-c2-l2",
+            product_family=USGS_C2_L2,
             band_map={
                 "blue": "blue", "green": "green", "red": "red",
                 "nir": "nir08", "swir1": "swir16", "swir2": "swir22",
@@ -26,6 +28,7 @@ CONFIG = StacConfig(
         ),
         "sentinel2": SensorStacSpec(
             collection="sentinel-2-l2a",
+            product_family=ESA_S2_L2A,
             band_map={
                 "blue": "B02", "green": "B03", "red": "B04",
                 "nir": "B08", "swir1": "B11", "swir2": "B12",

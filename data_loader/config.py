@@ -47,6 +47,23 @@ class AOI:
 class SensorSpec:
     name: str  # "landsat" | "sentinel2"
     resolution_m: Optional[float] = None
+    # Upstream product identity this sensor's request expects -- see
+    # data_loader.product_contract. None (the default) means "accept
+    # whatever product_family the configured provider naturally supplies
+    # for this sensor", which is what every config predating the product-
+    # contract system implicitly did and continues to do unchanged. Set
+    # explicitly only to make a request fail loudly if a provider/sensor
+    # substitution would silently change the underlying scientific product
+    # (e.g. pinning "usgs_c2_l2" so an accidental switch to a glad_ard-only
+    # provider errors instead of quietly returning a different product).
+    product_family: Optional[str] = None
+    # "any" | "latest" | "allow_mixed" | "pinned:<baseline>" -- see
+    # data_loader.product_contract.parse_version_policy. Only meaningful
+    # for product families where a provider can return more than one
+    # upstream processing version of the same acquisition (currently
+    # esa_s2_l2a via aws_earth_search); ignored (but still validated)
+    # elsewhere.
+    processing_version_policy: str = "any"
 
     def resolution(self) -> float:
         if self.resolution_m is not None:
@@ -101,12 +118,22 @@ class Config:
     temporal_mode: str = "annual_composite"  # "annual_composite" | "scene"
     reduce: str = "median"  # "median" | "mean" — only used for annual_composite
     provider_options: dict = field(default_factory=dict)
+    # Number of scenes processed concurrently (search/read/mask/index/write/
+    # provenance, per scene) via a thread pool -- see engine.py. Default 1
+    # (fully serial, identical behavior/ordering to every DataLoader run
+    # before this setting existed) is the conservative, backward-compatible
+    # default; set explicitly higher for large-area/long-time-series jobs.
+    # A scene is still the unit of work -- band reads within one scene are
+    # never parallelized.
+    workers: int = 1
 
     def __post_init__(self):
         if self.temporal_mode not in ("annual_composite", "scene"):
             raise ValueError(f"Unknown temporal_mode {self.temporal_mode!r}")
         if self.reduce not in ("median", "mean"):
             raise ValueError(f"Unknown reduce {self.reduce!r}")
+        if self.workers < 1:
+            raise ValueError(f"workers must be >= 1, got {self.workers!r}")
 
 
 def _parse_date(value) -> date:
@@ -164,4 +191,5 @@ def load_config(path: str | Path) -> Config:
         reduce=data.get("reduce", "median"),
         output=output,
         provider_options=data.get("provider_options", {}),
+        workers=data.get("workers", 1),
     )

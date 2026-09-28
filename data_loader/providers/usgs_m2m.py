@@ -36,10 +36,16 @@ from typing import Optional
 import numpy as np
 
 from data_loader.masking import landsat_qa_mask
+from data_loader.product_contract import SCENE, USGS_C2_L2, AcquisitionProvenance, ProductIdentity, parse_version_policy
 from data_loader.providers.base import Grid, SceneRef
 from data_loader.providers.gee import LANDSAT_OLI_BANDS, LANDSAT_TM_ETM_BANDS
 
 BASE_URL = "https://m2m.cr.usgs.gov/api/api/json/stable/"
+
+# M2M keys expire ~2h after last use; re-login proactively before that so a
+# long batch run (multi-scene download-request/download-retrieve polling)
+# doesn't die mid-run on an expired token.
+RELOGIN_AFTER = 90 * 60
 
 # Collection 2 Level-2 science product datasets, one per sensor
 # generation — mirrors the OLI vs TM/ETM split used elsewhere (gee.py,
@@ -54,6 +60,16 @@ def _band_map_for(display_id: str) -> dict[str, str]:
     if prefix in ("LC08", "LC09"):
         return LANDSAT_OLI_BANDS
     return LANDSAT_TM_ETM_BANDS
+
+
+_PLATFORM_PREFIXES = {
+    "LC08": "landsat-8", "LC09": "landsat-9",
+    "LE07": "landsat-7", "LT05": "landsat-5", "LT04": "landsat-4",
+}
+
+
+def _platform_for(display_id: str) -> Optional[str]:
+    return _PLATFORM_PREFIXES.get(display_id[:4])
 
 
 def _parse_m2m_response(resp, endpoint: str, payload: dict) -> dict:
@@ -96,9 +112,10 @@ class UsgsM2mProvider:
         self.username = username or os.environ.get("USGS_M2M_USERNAME")
         self.token = token or os.environ.get("USGS_M2M_TOKEN")
         self._session = None
+        self._session_born = None
 
     def _ensure_login(self):
-        if self._session is not None:
+        if self._session is not None and time.time() - self._session_born < RELOGIN_AFTER:
             return
         if not self.username or not self.token:
             raise ValueError(
@@ -110,7 +127,7 @@ class UsgsM2mProvider:
             )
         import requests
 
-        session = requests.Session()
+        session = self._session or requests.Session()
         resp = session.post(
             BASE_URL + "login-token",
             json={"username": self.username, "token": self.token},
@@ -118,6 +135,7 @@ class UsgsM2mProvider:
         body = _parse_m2m_response(resp, "login-token", {"username": self.username})
         session.headers.update({"X-Auth-Token": body["data"]})
         self._session = session
+        self._session_born = time.time()
 
     def _post(self, endpoint: str, payload: dict) -> dict:
         self._ensure_login()
@@ -132,13 +150,50 @@ class UsgsM2mProvider:
             except Exception:
                 pass
             self._session = None
+            self._session_born = None
 
-    def search_scenes(self, bbox, sensor, start, end, season_start, season_end, max_cloud_percent):
+    def capabilities(self) -> dict[str, ProductIdentity]:
+        return {"landsat": ProductIdentity(sensor="landsat", product_family=USGS_C2_L2, temporal_product=SCENE)}
+
+    def processing_profile(self, sensor: str) -> dict:
+        return {
+            "sr_scale": SR_SCALE,
+            "sr_offset": SR_OFFSET,
+            "qa_policy": "landsat_qa_pixel",
+            "reflectance_resampling": "bilinear",
+            "categorical_resampling": "nearest",
+        }
+
+    def source_metadata(self, scene: SceneRef) -> Optional[dict]:
+        """The full scene-search result USGS returned for this scene,
+        already fetched at search time (see search_scenes) -- no extra
+        API call needed. NOTE: like the rest of this provider, unverified
+        against a live account (see module docstring); this returns
+        whatever shape the documented M2M scene-search API produces."""
+        return scene.handle.get("raw_metadata")
+
+    def search_scenes(
+        self, bbox, sensor, start, end, season_start, season_end, max_cloud_percent,
+        processing_version_policy="any",
+    ):
         if sensor != "landsat":
             raise ValueError(
                 f"usgs_m2m only supports sensor='landsat' (got {sensor!r}) — "
                 "Sentinel-2 isn't USGS-distributed."
             )
+        # USGS Collection 2 doesn't expose a reprocessing-baseline concept
+        # the way Sentinel-2 does, and this provider has not observed (or
+        # been able to test live -- see the module docstring) more than one
+        # catalog entry per acquisition, so only "any"/"latest"/
+        # "allow_mixed" make sense here; a pin can't be honored.
+        version_kind, _ = parse_version_policy(processing_version_policy)
+        if version_kind == "pinned":
+            raise ValueError(
+                "[usgs_m2m] processing_version_policy='pinned:...' is not "
+                "supported -- USGS Collection 2 doesn't expose a "
+                "reprocessing-baseline concept here."
+            )
+
         west, south, east, north = bbox
         refs: list[SceneRef] = []
         for dataset in DATASETS:
@@ -166,9 +221,31 @@ class UsgsM2mProvider:
                 d = date.fromisoformat(str(acq)[:10])
                 if not _in_season(d, season_start, season_end):
                     continue
+                display_id = r["displayId"]
+                provenance = AcquisitionProvenance(
+                    provider=self.name,
+                    provider_item_id=display_id,
+                    # M2M's displayId for Collection 2 L2 is already the
+                    # full USGS product id (unlike the STAC providers'
+                    # shortened item id) -- not verified live (see module
+                    # docstring), based on the documented M2M schema.
+                    upstream_product_id=display_id,
+                    acquisition_datetime=str(acq),
+                    platform=_platform_for(display_id),
+                    product_family=USGS_C2_L2,
+                    collection=dataset,
+                    processing_baseline=None,
+                    generation_time=None,
+                    extra={"entity_id": r["entityId"]},
+                )
                 refs.append(SceneRef(
-                    id=r["displayId"], date=d, cloud_percent=r.get("cloudCover"),
-                    handle={"entityId": r["entityId"], "dataset": dataset, "displayId": r["displayId"]},
+                    id=display_id, date=d, cloud_percent=r.get("cloudCover"),
+                    # `raw_metadata: r` costs nothing extra -- it's the
+                    # exact scene-search result already fetched -- and is
+                    # what source_metadata() below returns unchanged as
+                    # the source snapshot, rather than re-querying M2M.
+                    handle={"entityId": r["entityId"], "dataset": dataset, "displayId": display_id, "raw_metadata": r},
+                    provenance=provenance,
                 ))
         return refs
 
