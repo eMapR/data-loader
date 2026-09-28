@@ -112,8 +112,32 @@ AOI_PRESETS = {
     # cloud filter as "2tile". Real UTM grid: 2523x2504 = 6.32M pixels
     # (larger than the naive WGS84-degree estimate, due to reprojection).
     "4tile": (-121.2469, 43.42574, -120.33118, 44.08403),
+    # 4x2 block h02-h05 x v04-v05, straddling the same v04/v05 boundary
+    # as "4tile". Unlike 2tile->4tile, window size CANNOT be held small
+    # here: to touch 4 tile columns a rectangle must span >2 full tiles
+    # (>300 km), and because the Albers ARD grid is rotated relative to
+    # lon/lat (the v04/v05 boundary climbs ~0.7 deg latitude across the
+    # span), the smallest lon/lat bbox that stays on that boundary
+    # end-to-end is ~310x125 km. Real UTM grid: 10009x4118 = 41.2M pixels
+    # (6.5x "4tile"), so this preset tests tile count AND window growth
+    # together -- the latter is exactly what open question #20 asks about.
+    "8tile": (-122.62, 43.22, -118.93, 44.26),
 }
 AOI_BBOX = AOI_PRESETS["2tile"]  # overridden by --aoi-preset in main()
+# When set, process only this many evenly spaced dates out of all
+# discovered dates (smoke-test mode): enough to measure real per-unit
+# cost/memory/output size at a preset's window, without the full run.
+# Discovery still covers the full period, so the result carries the full
+# per-date unit counts needed to project a full run's cost.
+SAMPLE_DATES: Optional[int] = None
+
+
+def _evenly_spaced(items: list, k: Optional[int]) -> list:
+    if not k or k >= len(items):
+        return list(items)
+    if k == 1:
+        return [items[len(items) // 2]]
+    return [items[round(i * (len(items) - 1) / (k - 1))] for i in range(k)]
 
 # 2 years, peak growing season only (standard practice for a Landsat
 # time-series stack -- minimizes snow/phenology/cloud noise) -- a
@@ -227,7 +251,14 @@ def run_provider(provider_name: str, output_dir: Path) -> dict:
     max_units_any_date = 0
     dates_processed_this_invocation = 0
 
-    for d in sorted(by_date):
+    selected_dates = _evenly_spaced(sorted(by_date), SAMPLE_DATES)
+    # Per-unit read timings, appended after every unit (not returned
+    # in-memory only) so they survive a kill and accumulate across the
+    # orchestrator's resume attempts -- the basis for per-unit cost
+    # estimates at this preset's window size.
+    unit_reads_path = output_dir / "unit_reads.jsonl"
+
+    for d in selected_dates:
         if _date_already_done(d):
             continue
         units = sorted(by_date[d], key=lambda r: (r.cloud_percent if r.cloud_percent is not None else 999))
@@ -238,13 +269,19 @@ def run_provider(provider_name: str, output_dir: Path) -> dict:
         contributing_ids = []
         for unit in units:
             t0 = time.perf_counter()
+            ok = False
             try:
                 band_dict = provider.read_scene_bands(unit, "landsat", RAW_BANDS_NEEDED, grid, pixel_cloud_mask=True)
+                ok = True
             except Exception as e:
                 failures.append({"date": d.isoformat(), "unit_id": unit.id, "error": f"{type(e).__name__}: {e}"})
                 continue
             finally:
-                timers["acquisition_s"] += time.perf_counter() - t0
+                read_s = time.perf_counter() - t0
+                timers["acquisition_s"] += read_s
+                with unit_reads_path.open("a") as f:
+                    f.write(json.dumps({"date": d.isoformat(), "unit_id": unit.id,
+                                        "read_s": read_s, "ok": ok}) + "\n")
 
             t0 = time.perf_counter()
             _fill_to_nan(band_dict, sr_offset)
@@ -313,7 +350,10 @@ def run_provider(provider_name: str, output_dir: Path) -> dict:
         "num_output_dates": num_output_dates,
         "num_permanently_failed_dates": len(permanently_failed_dates),
         "dates_processed_this_invocation": dates_processed_this_invocation,
-        "dates_remaining": len(by_date) - num_output_dates - len(permanently_failed_dates),
+        "dates_remaining": sum(1 for d in selected_dates
+                               if not _date_already_done(d) and d.isoformat() not in permanently_failed_dates),
+        "sampled_dates": [d.isoformat() for d in selected_dates] if SAMPLE_DATES else None,
+        "units_per_date_all": {d.isoformat(): len(v) for d, v in sorted(by_date.items())},
         "mean_contributing_units_per_date": float(np.mean(contributing_unit_counts)) if contributing_unit_counts else None,
         "max_contributing_units_any_date": max_units_any_date,
         "dates_needing_mosaic": sum(1 for c in contributing_unit_counts if c > 1),
@@ -327,16 +367,18 @@ def run_provider(provider_name: str, output_dir: Path) -> dict:
 
 
 def main():
-    global AOI_BBOX
+    global AOI_BBOX, SAMPLE_DATES
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--provider", required=True, choices=["usgs_ard", "planetary_computer"])
     ap.add_argument("--aoi-preset", default="2tile", choices=list(AOI_PRESETS))
     ap.add_argument("--output-dir", required=True)
     ap.add_argument("--result-file", required=True)
+    ap.add_argument("--sample-dates", type=int, default=None)
     args = ap.parse_args()
 
     AOI_BBOX = AOI_PRESETS[args.aoi_preset]
+    SAMPLE_DATES = args.sample_dates
     output_dir = Path(args.output_dir)
     captured = io.StringIO()
     cpu_before = resource.getrusage(resource.RUSAGE_SELF)

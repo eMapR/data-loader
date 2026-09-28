@@ -26,7 +26,8 @@ PROVIDERS = ["usgs_ard", "planetary_computer"]
 PHASE_KEYS = ["discovery_s", "acquisition_s", "mosaic_s", "indices_s", "write_s"]
 
 
-def run_one(provider: str, results_dir: Path, aoi_preset: str = "2tile", max_attempts: int = 30) -> dict:
+def run_one(provider: str, results_dir: Path, aoi_preset: str = "2tile", max_attempts: int = 30,
+            sample_dates: int | None = None) -> dict:
     """Invokes landtrendr_ready_run_case.py repeatedly against the SAME
     --output-dir until it reports no dates remaining, accumulating each
     attempt's phase timers (each attempt's timers cover only the dates it
@@ -85,7 +86,8 @@ def run_one(provider: str, results_dir: Path, aoi_preset: str = "2tile", max_att
                 [sys.executable, str(BENCH_DIR / "landtrendr_ready_run_case.py"),
                  "--provider", provider, "--aoi-preset", aoi_preset,
                  "--output-dir", str(output_dir),
-                 "--result-file", str(result_file)],
+                 "--result-file", str(result_file)]
+                + (["--sample-dates", str(sample_dates)] if sample_dates else []),
                 capture_output=True, text=True,
             )
             if not result_file.exists():
@@ -188,7 +190,9 @@ def compare_shared_dates(results: dict[str, dict], results_dir: Path) -> dict:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--providers", nargs="+", default=PROVIDERS, choices=PROVIDERS)
-    ap.add_argument("--aoi-preset", default="2tile", choices=["2tile", "4tile"])
+    ap.add_argument("--aoi-preset", default="2tile", choices=["2tile", "4tile", "8tile"])
+    ap.add_argument("--sample-dates", type=int, default=None,
+                    help="smoke-test mode: process only N evenly spaced dates per provider")
     ap.add_argument("--results-dir", default=None)
     args = ap.parse_args()
 
@@ -196,13 +200,15 @@ def main():
     # results from the earlier round) for backward compatibility; only
     # "4tile" gets a new, separate directory.
     default_dirname = "landtrendr_ready" if args.aoi_preset == "2tile" else f"landtrendr_ready_{args.aoi_preset}"
+    if args.sample_dates:
+        default_dirname += f"_smoke{args.sample_dates}"
     results_dir = Path(args.results_dir) if args.results_dir else BENCH_DIR / "results" / default_dirname
     results_dir.mkdir(parents=True, exist_ok=True)
 
     results = {}
     for provider in args.providers:
         print(f"[{provider}] running complete pipeline (aoi_preset={args.aoi_preset})...", flush=True)
-        r = run_one(provider, results_dir, aoi_preset=args.aoi_preset)
+        r = run_one(provider, results_dir, aoi_preset=args.aoi_preset, sample_dates=args.sample_dates)
         results[provider] = r
         if "error" in r:
             print(f"  ERROR: {r['error']}\n{r.get('stderr','')}")

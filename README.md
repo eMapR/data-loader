@@ -42,7 +42,7 @@ aoi:
   upper_left: [-123.855, 45.896]   # [lon, lat], EPSG:4326
   lower_right: [-123.835, 45.882]  # [lon, lat], EPSG:4326
 
-provider: planetary_computer     # planetary_computer | aws_earth_search | gee | usgs_m2m
+provider: planetary_computer     # planetary_computer | aws_earth_search | gee | usgs_ard | usgs_m2m | glad_ard
 
 sensors:
   - name: landsat                # landsat | sentinel2
@@ -85,7 +85,12 @@ write them as a separate file unless you also list them in `output.bands`.
 | `planetary_computer` | none | Microsoft's free STAC API + signed COG reads |
 | `aws_earth_search` | none | Element84's Earth Search STAC API over AWS Open Data |
 | `gee` | Earth Engine account + project | ad hoc `getDownloadURL` fetch, no batch/Drive step — see `data_loader/providers/gee.py`. Good for exploratory AOIs; capped around 48MB per request. |
-| `usgs_m2m` | EROS account + M2M token | Landsat only (no Sentinel-2). Heavier than the STAC providers — each scene is a full bundle download + local extraction via `download-request`/`download-retrieve`, not a windowed COG read. Implemented against the documented M2M API schema, not verified live — see `data_loader/providers/usgs_m2m.py`. |
+| `usgs_ard` | EROS account + M2M token | Landsat Collection 2 U.S. ARD surface reflectance, read per band directly from USGS on the fixed national Albers tile grid. Landsat only, CONUS/AK/HI only. M2M allows one request at a time per account, which caps concurrency — see the report. |
+| `usgs_m2m` | EROS account + M2M token | Scene-based Landsat Collection 2 (no Sentinel-2). Heavier than the STAC providers — each scene is a full bundle download + local extraction. M2M auth verified live; the bundle read path has not yet been exercised end-to-end. |
+| `glad_ard` | none | GLAD (UMD) 16-day normalized Landsat ARD tiles from the public S3 mirror, 2020–present. Landsat only. |
+
+Credentials are read from environment variables (see `.env.example`;
+copy it to `.env`, which is git-ignored) rather than from config files.
 
 ### Output layout
 
@@ -130,5 +135,40 @@ on disk without guessing filenames.
   boundary (e.g. `season_start: "11-01"`, `season_end: "02-28"`) in its
   fast composite path — falls back to the generic per-scene path in that
   case, which does handle wrap-around.
-- `usgs_m2m` is a stub (`NotImplementedError`) — needs a registered EROS
-  account to build/test against.
+- Scene-level reads can run concurrently via `workers:` in the config
+  (default 1). Gains flatten past ~2–4 workers (network/provider bound);
+  `usgs_ard` is further limited by M2M's one-request-at-a-time rule.
+- Local compositing holds every contributing scene for a composite in
+  memory at once — watch memory on large AOIs / long periods.
+
+## Findings and benchmarks
+
+DataLoader is also where we record what we've measured about the
+providers — speed, scaling, reliability, and whether two sources produce
+scientifically equivalent products.
+
+- [`docs/DATALOADER_DEVELOPMENT_REPORT.md`](docs/DATALOADER_DEVELOPMENT_REPORT.md) —
+  the full development and scientific report: architecture, correctness
+  bugs found and fixed, provenance, performance findings, open questions.
+- [`docs/benchmarks/README.md`](docs/benchmarks/README.md) — methodology and
+  headline results for each benchmark, and how to re-run it.
+- [`docs/figures/`](docs/figures/) — figures generated from benchmark results.
+
+## Repository layout
+
+```
+data_loader/          the loader: config, engine, masking, indices, manifest
+  providers/          one module per imagery source (shared Provider interface)
+examples/             example YAML configs
+tests/                unit tests (pytest; network-free)
+bench/                benchmark harnesses and analysis scripts
+  results/            raw benchmark outputs + imagery — git-ignored, can be 10s of GB
+docs/
+  DATALOADER_DEVELOPMENT_REPORT.md
+  benchmarks/         methodology + results summaries
+    data/             compact summary JSON extracted from bench/results (tracked)
+  figures/            generated figures we want to keep (tracked)
+```
+
+Raw benchmark outputs and generated imagery stay out of Git; only compact
+summaries and figures, produced by scripts in `bench/`, are committed.

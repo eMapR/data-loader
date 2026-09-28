@@ -1,0 +1,87 @@
+[
+  {
+    "aoi": "2tile",
+    "smoke": false,
+    "source": [
+      "bench/results/landtrendr_ready/landtrendr_ready_20260921T035243Z.json",
+      "bench/results/landtrendr_ready/landtrendr_ready_20260920T180803Z.json"
+    ],
+    "providers": {
+      "usgs_ard": {
+        "grid_mpx": 2.8,
+        "units_discovered": 67,
+        "dates_discovered": 34,
+        "dates_output": 34,
+        "units_read": 67,
+        "per_unit_read_s": 22.1,
+        "per_date_overhead_s": 1.2,
+        "peak_rss_mb": 1101,
+        "output_mb_per_date": 47.9,
+        "failures": 0,
+        "retries": 4.0,
+        "attempts": 3,
+        "wall_s": 1548.6,
+        "wall_s_per_output_date": 45.5
+      },
+      "planetary_computer": {
+        "grid_mpx": 2.8,
+        "units_discovered": 57,
+        "dates_discovered": 40,
+        "dates_output": 40,
+        "units_read": 57,
+        "per_unit_read_s": 23.9,
+        "per_date_overhead_s": 1.1,
+        "peak_rss_mb": 1046,
+        "output_mb_per_date": 42.2,
+        "failures": 0,
+        "retries": 0.0,
+        "attempts": 2,
+        "wall_s": 1442.0,
+        "wall_s_per_output_date": 36.0
+      }
+    },
+    "shared_dates": 27
+  },
+  {
+    "aoi": "4tile",
+    "smoke": false,
+    "source": [
+      "bench/results/landtrendr_ready_4tile/landtrendr_ready_20260922T021440Z.json"
+    ],
+    "providers": {
+      "usgs_ard": {
+        "grid_mpx": 6.32,
+        "units_discovered": 137,
+        "dates_discovered": 36,
+        "dates_output": 36,
+        "units_read": 137,
+        "per_unit_read_s": 23.0,
+        "per_date_overhead_s": 3.3,
+        "peak_rss_mb": 1598,
+        "output_mb_per_date": 115.8,
+        "failures": 0,
+        "retries": 3.0,
+        "attempts": 2,
+        "wall_s": 3293.9,
+        "wall_s_per_output_date": 91.5
+      },
+      "planetary_computer": {
+        "grid_mpx": 6.32,
+        "units_discovered": 83,
+        "dates_discovered": 44,
+        "dates_output": 44,
+        "units_read": 83,
+        "per_unit_read_s": 41.9,
+        "per_date_overhead_s": 2.6,
+        "peak_rss_mb": 1802,
+        "output_mb_per_date": 96.0,
+        "failures": 0,
+        "retries": 0.0,
+        "attempts": 2,
+        "wall_s": 3601.5,
+        "wall_s_per_output_date": 81.9
+      }
+    },
+    "shared_dates": 31
+  }
+]

@@ -4,3 +4,27 @@ __pycache__/
 output/
 .env
 bench/results/
+
+# Credentials -- never commit (USGS M2M token, AWS keys, GEE service accounts)
+.env*
+!.env.example
+*.pem
+*.key
+.netrc
+*credentials*.json
+*service-account*.json
+
+# Generated imagery / large outputs. Tracked figures live in docs/figures/,
+# tracked compact benchmark summaries in docs/benchmarks/data/.
+*.tif
+*.tiff
+*.nc
+*.zarr/
+*.h5
+
+# Tooling caches
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+.venv/
+venv/
