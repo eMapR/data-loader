@@ -83,5 +83,75 @@
       }
     },
     "shared_dates": 31
+  },
+  {
+    "aoi": "8tile_smoke6",
+    "smoke": true,
+    "source": [
+      "bench/results/landtrendr_ready_8tile_smoke6/landtrendr_ready_20260928T172252Z.json"
+    ],
+    "providers": {
+      "usgs_ard": {
+        "grid_mpx": 41.22,
+        "units_discovered": 345,
+        "dates_discovered": 73,
+        "dates_output": 6,
+        "units_read": 29,
+        "per_unit_read_s": 71.0,
+        "per_date_overhead_s": 12.8,
+        "peak_rss_mb": 8504,
+        "output_mb_per_date": 361.6,
+        "failures": 0,
+        "retries": 0.0,
+        "attempts": 1,
+        "per_unit_read_s_range": [
+          29.8,
+          204.1
+        ],
+        "per_unit_read_s_median": 56.7,
+        "projected_full_run": {
+          "units": 345,
+          "dates": 73,
+          "wall_h": 7.1,
+          "wall_h_range_p25_p75": [
+            4.6,
+            8.6
+          ],
+          "output_gb": 26.4,
+          "peak_rss_mb": 8504
+        }
+      },
+      "planetary_computer": {
+        "grid_mpx": 41.22,
+        "units_discovered": 159,
+        "dates_discovered": 79,
+        "dates_output": 6,
+        "units_read": 16,
+        "per_unit_read_s": 107.5,
+        "per_date_overhead_s": 13.1,
+        "peak_rss_mb": 8394,
+        "output_mb_per_date": 429.6,
+        "failures": 0,
+        "retries": 0.0,
+        "attempts": 1,
+        "per_unit_read_s_range": [
+          12.5,
+          681.9
+        ],
+        "per_unit_read_s_median": 45.3,
+        "projected_full_run": {
+          "units": 159,
+          "dates": 79,
+          "wall_h": 5.0,
+          "wall_h_range_p25_p75": [
+            1.5,
+            6.3
+          ],
+          "output_gb": 33.9,
+          "peak_rss_mb": 8394
+        }
+      }
+    },
+    "shared_dates": 1
   }
 ]
