@@ -15,10 +15,15 @@ Subcommands (all state under bench/results/ard_tile_history/<tile>/):
     pilot               a few full-tile reads from each Landsat era (serial),
                         then a small concurrent batch; prints the full-run
                         runtime/storage estimate. Writes pilot.jsonl.
-    run [--workers N]   the complete acquisition. Resumable: every finished
+    run [--workers N] [--save uint16|float32|none]
+                        the complete acquisition. Resumable: every finished
                         observation is appended to records.jsonl as it
                         completes; re-running skips those. The orchestrator
                         re-launches the worker process if it is killed.
+                        --save (default uint16) keeps each observation in
+                        imagery/: uint16 = the original C2 SR DN (lossless
+                        inverse of scale/offset, 0 = nodata/fill/QA-masked,
+                        scale/offset in the band tags), ~half of float32.
     report              summarizes records.jsonl/attempts.jsonl (targeted output)
 
 Timing split per observation:
@@ -179,7 +184,32 @@ def _file_sizes(provider, obs_id: str) -> int | None:
     return total
 
 
-def acquire_one(provider, scene, grid, save_dir: Path | None = None) -> dict:
+def _write_uint16(path: Path, arrays: dict, grid) -> None:
+    """Reflectance -> original C2 SR DN (exact inverse of usgs_ard's scale/offset).
+    QA-masked (NaN) and fill (-0.2, i.e. DN 0) both become 0 = nodata."""
+    import numpy as np
+    import rasterio
+    from data_loader.providers.usgs_ard import SR_OFFSET, SR_SCALE
+    names = list(arrays)
+    tmp = path.with_suffix(".tif.tmp")
+    profile = {"driver": "GTiff", "dtype": "uint16", "count": len(names),
+               "height": grid.height, "width": grid.width, "crs": grid.crs,
+               "transform": grid.transform, "nodata": 0, "compress": "deflate",
+               "predictor": 2, "tiled": True}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with rasterio.open(tmp, "w", **profile) as dst:
+        for i, n in enumerate(names, start=1):
+            a = arrays[n]
+            dn = np.rint((a - SR_OFFSET) / SR_SCALE)
+            dn = np.where(np.isnan(dn), 0, np.clip(dn, 0, 65535)).astype("u2")
+            dst.write(dn, i)
+            dst.set_band_description(i, n)
+        dst.scales = [SR_SCALE] * len(names)
+        dst.offsets = [SR_OFFSET] * len(names)
+    tmp.replace(path)
+
+
+def acquire_one(provider, scene, grid, save_dir: Path | None = None, save_dtype: str = "float32") -> dict:
     """One full-tile observation through DataLoader's read path."""
     import numpy as np
     tl = provider._mint_tl
@@ -204,7 +234,10 @@ def acquire_one(provider, scene, grid, save_dir: Path | None = None) -> dict:
         from data_loader.engine import _write_geotiff
         p = save_dir / f"bands_{scene.date.isoformat()}_{scene.id}.tif"
         t1 = time.perf_counter()
-        _write_geotiff(p, arrays, grid)
+        if save_dtype == "uint16":
+            _write_uint16(p, arrays, grid)
+        else:
+            _write_geotiff(p, arrays, grid)
         rec.update(write_s=time.perf_counter() - t1, saved_bytes=p.stat().st_size)
     del arrays
     return rec
@@ -358,7 +391,8 @@ def cmd_run(args):
         if not pending:
             print("nothing pending -- run complete"); break
         print(f"[attempt {attempt}] {len(pending)} observations pending", flush=True)
-        rc = subprocess.run([sys.executable, __file__, "_worker", "--workers", str(args.workers)]).returncode
+        rc = subprocess.run([sys.executable, __file__, "_worker", "--workers", str(args.workers),
+                             "--save", args.save]).returncode
         if rc != 0:
             print(f"[attempt {attempt}] worker exited {rc} (killed?) -- resuming", flush=True)
             time.sleep(10)
@@ -382,7 +416,9 @@ def cmd_worker(args):
     grid = _load_grid()
     sys.stdout = counter = _CountingStdout(sys.stdout)
     lock = threading.Lock()
-    attempt = {"started": time.time(), "workers": args.workers, "pending_at_start": len(pending)}
+    attempt = {"started": time.time(), "workers": args.workers, "pending_at_start": len(pending),
+               "save": args.save}
+    save_dir = None if args.save == "none" else OUT / "imagery"
     net0 = _net_bytes()
     t0 = time.perf_counter()
     cpu0 = resource.getrusage(resource.RUSAGE_SELF)
@@ -401,7 +437,8 @@ def cmd_worker(args):
         path.write_text("".join(json.dumps(r) + "\n" for r in rows + [attempt]))
 
     with (OUT / "records.jsonl").open("a") as f, ThreadPoolExecutor(args.workers) as ex:
-        futs = {ex.submit(acquire_one, p, ref, grid): ref.id for ref in _scene_refs(pending)}
+        futs = {ex.submit(acquire_one, p, ref, grid, save_dir, args.save): ref.id
+                for ref in _scene_refs(pending)}
         for fu in as_completed(futs):
             rec = fu.result()
             rec["t_end"] = time.time()
@@ -452,6 +489,9 @@ def cmd_report(_args):
                     "median": round(st.median(r["read_s"] for r in okl), 1),
                     "sum_h": round(sum(r["read_s"] for r in okl) / 3600, 2)},
             bytes_gb=round(sum(r.get("bytes") or 0 for r in okl) / 1e9, 1),
+            saved_gb=round(sum(r.get("saved_bytes") or 0 for r in okl) / 1e9, 1),
+            write_s_mean=round(st.mean(r["write_s"] for r in okl if "write_s" in r), 1)
+                if any("write_s" in r for r in okl) else None,
             net_gb_indicative=round(sum(a.get("net_mb_indicative") or 0 for a in atts) / 1e3, 1),
             peak_rss_mb=round(max(a["peak_rss_mb"] for a in atts)),
             cpu_h=round(sum(a["cpu_s"] for a in atts) / 3600, 2),
@@ -478,6 +518,8 @@ def main():
     sub.add_parser("estimate")
     r = sub.add_parser("run"); r.add_argument("--workers", type=int, default=4); r.add_argument("--max-attempts", type=int, default=50)
     w = sub.add_parser("_worker"); w.add_argument("--workers", type=int, default=4)
+    for sp in (r, w):
+        sp.add_argument("--save", choices=["uint16", "float32", "none"], default="uint16")
     sub.add_parser("report")
     a = ap.parse_args()
     {"discover": cmd_discover, "pilot": cmd_pilot, "estimate": lambda _a: estimate(), "run": cmd_run,
