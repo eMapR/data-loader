@@ -381,11 +381,24 @@ class UsgsArdProvider:
             import requests
 
             session = self._session or requests.Session()
-            resp = session.post(
-                M2M_BASE_URL + "login-token",
-                json={"username": self.username, "token": self.token},
-            )
-            body = resp.json()
+            # login-token is an M2M request like any other: it must queue
+            # behind _m2m_call_lock, and a RATE_LIMIT answer (another
+            # process on the same account) is retried. Found live
+            # 2026-10-02: the 90-min re-login raced in-flight calls from
+            # other threads, got RATE_LIMIT, and failed 9 reads outright.
+            for attempt in range(self.retries):
+                with self._m2m_call_lock:
+                    resp = session.post(
+                        M2M_BASE_URL + "login-token",
+                        json={"username": self.username, "token": self.token},
+                        timeout=180,
+                    )
+                body = resp.json()
+                if not _is_rate_limit_error(body):
+                    break
+                print(f"[{self.name}] M2M login-token rate-limit retry {attempt + 1}/{self.retries}: "
+                      f"{body.get('errorCode')}: {body.get('errorMessage')}")
+                time.sleep(2 * (attempt + 1))
             if body.get("errorCode") or not resp.ok:
                 raise RuntimeError(
                     f"[usgs_ard] M2M login-token failed (HTTP {resp.status_code}): "

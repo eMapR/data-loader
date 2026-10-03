@@ -783,5 +783,53 @@ class NativeTileReadTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
 
+class LoginTests(unittest.TestCase):
+    def _rate_limited(self):
+        resp = MagicMock(status_code=500, ok=False)
+        resp.json.return_value = {"errorCode": "RATE_LIMIT",
+                                  "errorMessage": "Your account does not support multiple requests at a time."}
+        return resp
+
+    def _ok(self):
+        resp = MagicMock(status_code=200, ok=True)
+        resp.json.return_value = {"data": "api-key"}
+        return resp
+
+    def test_login_rate_limit_is_retried(self):
+        provider = UsgsArdProvider(username="u", token="t", retries=4)
+        session = MagicMock()
+        session.post.side_effect = [self._rate_limited(), self._rate_limited(), self._ok()]
+        session.headers = {}
+        with patch("requests.Session", return_value=session), patch("time.sleep"):
+            self.assertIs(provider._ensure_login(), session)
+        self.assertEqual(session.post.call_count, 3)
+        self.assertEqual(session.headers["X-Auth-Token"], "api-key")
+
+    def test_login_queues_behind_inflight_m2m_call(self):
+        """The re-login must not overlap another thread's M2M request."""
+        provider = UsgsArdProvider(username="u", token="t")
+        session = MagicMock()
+        session.headers = {}
+        held = []
+
+        def post(url, json=None, timeout=None):
+            held.append(provider._m2m_call_lock.locked())
+            return self._ok()
+
+        session.post.side_effect = post
+        with patch("requests.Session", return_value=session):
+            provider._ensure_login()
+        self.assertEqual(held, [True])
+
+    def test_login_rate_limit_exhausted_raises(self):
+        provider = UsgsArdProvider(username="u", token="t", retries=2)
+        session = MagicMock()
+        session.post.side_effect = [self._rate_limited(), self._rate_limited()]
+        with patch("requests.Session", return_value=session), patch("time.sleep"):
+            with self.assertRaisesRegex(RuntimeError, "login-token failed.*RATE_LIMIT"):
+                provider._ensure_login()
+        self.assertEqual(session.post.call_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
