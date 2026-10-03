@@ -31,7 +31,9 @@ Timing split per observation:
             files, INCLUDING time spent queued on the provider's
             one-request-at-a-time M2M lock (that wait is a real cost of the
             M2M restriction under concurrency, so it's attributed to minting)
-    read_s  everything else: /vsicurl COG reads, QA masking, scale/offset
+    read_s  everything else: band file downloads (whole files in parallel
+            for native-grid tile reads -- see usgs_ard._read_native_tile),
+            decoding, QA masking, scale/offset
 Bytes: each band file's size from a 1-byte Range GET (Content-Range), i.e.
 what a full-tile read transfers (COG overviews aren't read, so this is a
 slight upper bound); plus a machine-wide `netstat` delta per attempt as a

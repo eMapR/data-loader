@@ -44,11 +44,21 @@ needs (6 SR bands + QA_PIXEL, ~213 MB/tile) rather than the ~750 MB of all
 
 Those signed URLs additionally serve `Accept-Ranges: bytes` and answer
 range requests with HTTP 206, and the underlying files are real COGs
-(256x256 internal tiles, 6 overview levels) -- so reads are genuinely
-windowed through GDAL/rasterio's /vsicurl/, transferring only the bytes
-covering the AOI, exactly like the Planetary Computer path. This is a
-fundamentally lighter access pattern than usgs_m2m.py's scene bundles
-(download whole .tar -> extract -> read).
+(256x256 internal tiles, 6 overview levels) -- so reads of a SUBSET of a
+tile (or onto any other grid) are windowed through GDAL/rasterio's
+/vsicurl/, transferring only the bytes covering the AOI, exactly like the
+Planetary Computer path. This is a fundamentally lighter access pattern
+than usgs_m2m.py's scene bundles (download whole .tar -> extract -> read).
+
+FULL-TILE READS ON THE NATIVE GRID download whole band files instead (see
+_read_native_tile). Measured 2026-10-02 on h003v004: /vsicurl reads one
+full tile's 7 files in ~110 s (GDAL issues many small range requests,
+one band after another, each paying round-trip latency), while plain
+whole-file GETs of the same 7 files, in parallel, take ~5-6 s and decode
+from memory in ~2 s -- bit-identical output, since a native-grid
+"warp" is the identity. The signed URLs serve ~10-28 MB/s per stream
+(CloudFront in front of landsatlook), so per-request latency, not
+bandwidth, was the bottleneck.
 
 Other live-verified facts:
 - Bands `blue`/`green`/`red`/`nir08`/`swir16`/`swir22`/`qa_pixel` use the
@@ -74,6 +84,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timezone
 from typing import Optional
 
@@ -561,17 +572,109 @@ class UsgsArdProvider:
                         continue
                     raise
 
+        resampling = {suffix_for[b]: Resampling.bilinear for b in bands}
+        if pixel_cloud_mask:
+            resampling[suffix_for["qa"]] = Resampling.nearest
+        if _is_native_tile_grid(scene, grid):
+            dn_by_suffix = self._read_native_tile(tile_product_id, needed, grid, resampling)
+            read = dn_by_suffix.__getitem__
+        else:
+            read = lambda suffix: read_asset(suffix, resampling[suffix])
+
         out: dict[str, np.ndarray] = {}
         for b in bands:
-            dn = read_asset(suffix_for[b], Resampling.bilinear)
+            dn = read(suffix_for[b])
             out[b] = dn.astype("f4") * SR_SCALE + SR_OFFSET
 
         if pixel_cloud_mask:
-            qa = read_asset(suffix_for["qa"], Resampling.nearest)
+            qa = read(suffix_for["qa"])
             bad = landsat_qa_mask(qa)
             for arr in out.values():
                 arr[bad] = np.nan
         return out
+
+
+    # -- full-tile reads on the native grid --------------------------------
+
+    def _download_band(self, tile_product_id: str, suffix: str, needed: list[str]) -> bytes:
+        """One whole band file over its signed URL. Re-mints once on an
+        auth-shaped failure (expired signature), and retries transient
+        transport failures with backoff -- both bounded."""
+        import requests
+
+        refreshed = False
+        attempt = 0
+        while True:
+            url = self._band_url(tile_product_id, suffix, needed, force_refresh=refreshed and attempt == 0)
+            try:
+                r = requests.get(url, timeout=(30, 300))
+                if r.status_code in (401, 403) and not refreshed:
+                    print(f"[{self.name}] {tile_product_id}/{suffix}: HTTP {r.status_code}, "
+                          "looks like an expired signed URL -- re-minting and retrying")
+                    refreshed, attempt = True, 0
+                    continue
+                r.raise_for_status()
+                expected = r.headers.get("Content-Length")
+                if expected is not None and int(expected) != len(r.content):
+                    raise requests.ConnectionError(
+                        f"truncated body: {len(r.content)} of {expected} bytes")
+                return r.content
+            except (requests.ConnectionError, requests.Timeout) as e:
+                err = e
+            except requests.HTTPError as e:
+                if e.response is None or e.response.status_code < 500:
+                    raise
+                err = e
+            attempt += 1
+            if attempt >= self.retries:
+                raise RuntimeError(
+                    f"[{self.name}] {tile_product_id}/{suffix}: download failed after "
+                    f"{attempt} attempts: {err}") from err
+            print(f"[{self.name}] {tile_product_id}/{suffix} transport retry {attempt}/{self.retries}: {err}")
+            time.sleep(2 ** attempt)
+
+    def _read_native_tile(self, tile_product_id: str, needed: list[str], grid: Grid,
+                          resampling: dict) -> dict[str, np.ndarray]:
+        """Whole-file GETs of every needed band, in parallel, decoded from
+        memory. Each decoded file's grid is checked against `grid`; any
+        mismatch (which the STAC proj:* precheck should already rule out)
+        falls back to warping the in-memory file, so the result never
+        depends on that precheck being right."""
+        from rasterio.crs import CRS
+        from rasterio.io import MemoryFile
+        from rasterio.vrt import WarpedVRT
+
+        with ThreadPoolExecutor(len(needed)) as ex:
+            blobs = dict(zip(needed, ex.map(
+                lambda s: self._download_band(tile_product_id, s, needed), needed)))
+
+        out = {}
+        for suffix, blob in blobs.items():
+            with MemoryFile(blob) as mem, mem.open() as src:
+                if (src.width, src.height) == (grid.width, grid.height) \
+                        and src.transform.almost_equals(grid.transform) \
+                        and src.crs == CRS.from_user_input(grid.crs):
+                    out[suffix] = src.read(1)
+                else:
+                    with WarpedVRT(src, crs=grid.crs, transform=grid.transform, width=grid.width,
+                                   height=grid.height, resampling=resampling[suffix]) as vrt:
+                        out[suffix] = vrt.read(1)
+            blobs[suffix] = None  # free each file's bytes once decoded
+        return out
+
+
+def _is_native_tile_grid(scene: SceneRef, grid: Grid) -> bool:
+    """Does `grid` cover exactly this ARD tile at its native resolution,
+    per the STAC item's proj:shape/proj:transform? (Cheap precheck that
+    selects the whole-file read path; CRS is verified after decoding.)"""
+    from rasterio.transform import Affine
+
+    props = getattr(scene.handle, "properties", None) or {}
+    shape, transform = props.get("proj:shape"), props.get("proj:transform")
+    if not shape or not transform or len(transform) < 6:
+        return False
+    return (tuple(shape) == (grid.height, grid.width)
+            and Affine(*transform[:6]).almost_equals(grid.transform))
 
 
 def make_provider(usgs_username: Optional[str] = None, usgs_token: Optional[str] = None, **kwargs) -> UsgsArdProvider:

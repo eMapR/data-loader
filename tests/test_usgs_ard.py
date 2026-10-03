@@ -628,5 +628,160 @@ class SourceMetadataTests(unittest.TestCase):
         self.assertNotIn("requestSignature", str(record))
 
 
+class NativeTileReadTests(unittest.TestCase):
+    """Full-tile reads on the native ARD grid download whole band files
+    in parallel and decode them from memory, instead of /vsicurl range
+    reads (~110 s -> ~8 s per tile, measured live 2026-10-02)."""
+
+    CRS = "EPSG:5070"
+
+    def _native(self):
+        from rasterio.transform import Affine
+        transform = Affine(30, 0, -2115585, 0, -30, 2714805)
+        item = _ard_item()
+        item.properties["proj:shape"] = [4, 4]
+        item.properties["proj:transform"] = list(transform)[:6]
+        scene = SceneRef(id=item.id, date=date(2023, 9, 9), cloud_percent=0.1, handle=item)
+        return scene, Grid(crs=self.CRS, transform=transform, width=4, height=4)
+
+    def _tif(self, arr, transform):
+        from rasterio.io import MemoryFile
+        with MemoryFile() as mem:
+            with mem.open(driver="GTiff", width=arr.shape[1], height=arr.shape[0], count=1,
+                          dtype=arr.dtype, crs=self.CRS, transform=transform) as dst:
+                dst.write(arr, 1)
+            return mem.read()
+
+    def _files(self, transform):
+        band = np.full((4, 4), 10000, dtype="uint16")
+        qa = np.zeros((4, 4), dtype="uint16")
+        qa[0, 0] = 1 << 3  # cloud bit
+        return {"band": self._tif(band, transform), "qa": self._tif(qa, transform)}
+
+    def _response(self, status, content=b""):
+        import requests
+        r = requests.Response()
+        r.status_code, r._content = status, content
+        r.headers["Content-Length"] = str(len(content))
+        return r
+
+    def _read(self, scene, grid, get, bands=("blue", "green"), pixel_cloud_mask=True, retries=4):
+        provider = UsgsArdProvider(username="u", token="t", retries=retries)
+        mints = []
+
+        def fake_urls(tile_id, suffixes):
+            mints.append(list(suffixes))
+            return {s: f"https://signed/{tile_id}_{s}.TIF?sig={len(mints)}" for s in suffixes}
+
+        with patch.object(UsgsArdProvider, "_signed_band_urls", side_effect=fake_urls), \
+             patch("requests.get", side_effect=get) as req, \
+             patch("rasterio.open", side_effect=AssertionError("must not use /vsicurl")), \
+             patch("time.sleep"):
+            out = provider.read_scene_bands(scene, "landsat", list(bands), grid, pixel_cloud_mask)
+        return out, req, mints
+
+    def test_native_grid_downloads_whole_files_once_each(self):
+        scene, grid = self._native()
+        files = self._files(grid.transform)
+        out, req, mints = self._read(scene, grid, lambda url, timeout: self._response(
+            200, files["qa" if "QA_PIXEL" in url else "band"]))
+        self.assertEqual(req.call_count, 3)          # blue, green, QA -- one GET each
+        self.assertEqual(len(mints), 1)              # all bands minted in one round trip
+        self.assertAlmostEqual(float(out["blue"][1, 1]), 10000 * 2.75e-5 - 0.2, places=6)
+        self.assertTrue(np.isnan(out["blue"][0, 0]))  # QA-masked
+        self.assertEqual(out["green"].shape, (4, 4))
+
+    def test_subset_grid_keeps_vsicurl_path(self):
+        from data_loader.providers.usgs_ard import _is_native_tile_grid
+        from rasterio.transform import Affine
+        scene, grid = self._native()
+        self.assertTrue(_is_native_tile_grid(scene, grid))
+        sub = Grid(crs=grid.crs, transform=grid.transform @ Affine.translation(1, 1), width=2, height=2)
+        self.assertFalse(_is_native_tile_grid(scene, sub))
+        self.assertFalse(_is_native_tile_grid(_scene(), _grid()))
+
+    def test_file_off_requested_grid_is_warped_not_returned_raw(self):
+        """Safety net: if a file doesn't actually match the grid the STAC
+        metadata promised, it's warped onto the requested grid."""
+        from rasterio.transform import Affine
+        scene, grid = self._native()
+        files = self._files(grid.transform @ Affine.translation(2, 0))  # shifted 2 px east
+        out, _, _ = self._read(scene, grid, lambda url, timeout: self._response(
+            200, files["qa" if "QA_PIXEL" in url else "band"]), bands=("blue",), pixel_cloud_mask=False)
+        self.assertEqual(out["blue"].shape, (4, 4))
+        # Left two columns fall outside the shifted file -> nodata, not data.
+        self.assertTrue(np.allclose(out["blue"][:, :2], 0 * 2.75e-5 - 0.2))
+        self.assertTrue(np.allclose(out["blue"][:, 2:], 10000 * 2.75e-5 - 0.2))
+
+    def test_expired_signature_reminted_once(self):
+        scene, grid = self._native()
+        files = self._files(grid.transform)
+        seen = []
+
+        def get(url, timeout):
+            seen.append(url)
+            if "sig=1" in url:
+                return self._response(403)
+            return self._response(200, files["band"])
+
+        out, _, mints = self._read(scene, grid, get, bands=("blue",), pixel_cloud_mask=False)
+        self.assertIn("blue", out)
+        self.assertEqual(len(mints), 2)
+        self.assertEqual(seen, [seen[0], seen[0].replace("sig=1", "sig=2")])
+
+    def test_transient_failures_retry_then_raise(self):
+        import requests
+        scene, grid = self._native()
+        files = self._files(grid.transform)
+        calls = []
+
+        def flaky(url, timeout):
+            calls.append(url)
+            if len(calls) == 1:
+                raise requests.ConnectionError("Connection reset by peer")
+            if len(calls) == 2:
+                return self._response(503)
+            return self._response(200, files["band"])
+
+        out, _, _ = self._read(scene, grid, flaky, bands=("blue",), pixel_cloud_mask=False)
+        self.assertIn("blue", out)
+        self.assertEqual(len(calls), 3)
+
+        def down(url, timeout):
+            raise requests.Timeout("read timed out")
+
+        with self.assertRaisesRegex(RuntimeError, "download failed after 2 attempts"):
+            self._read(scene, grid, down, bands=("blue",), pixel_cloud_mask=False, retries=2)
+
+    def test_truncated_body_is_retried(self):
+        scene, grid = self._native()
+        files = self._files(grid.transform)
+        calls = []
+
+        def get(url, timeout):
+            calls.append(url)
+            r = self._response(200, files["band"])
+            if len(calls) == 1:
+                r._content = r._content[:100]  # Content-Length still claims the full size
+            return r
+
+        out, _, _ = self._read(scene, grid, get, bands=("blue",), pixel_cloud_mask=False)
+        self.assertIn("blue", out)
+        self.assertEqual(len(calls), 2)
+
+    def test_missing_file_is_not_retried(self):
+        import requests
+        scene, grid = self._native()
+        calls = []
+
+        def get(url, timeout):
+            calls.append(url)
+            return self._response(404)
+
+        with self.assertRaises(requests.HTTPError):
+            self._read(scene, grid, get, bands=("blue",), pixel_cloud_mask=False)
+        self.assertEqual(len(calls), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
