@@ -29,39 +29,45 @@ plus `manifest.json` come out. Entry point: `python -m data_loader <config>`
 - Don't assume "open data" is free or anonymous — check (Requester Pays,
   M2M auth).
 
-## Current task (as of 2026-10-02): full ARD tile history run on a server
-Goal: measure the real cost of acquiring one complete ARD tile's Landsat
-history (tile `h003v004`, central Oregon Cascades, 5000x5000 px at 30 m,
-1990-01-01 to present, all of Landsat 4/5/7/8/9) directly from USGS. This
-prices the eventual Oregon-scale run. Script: `bench/ard_tile_history_bench.py`
-(its docstring explains the subcommands).
+## Done (2026-10-03): full ARD tile history run on the server
+Measured the real cost of acquiring one complete ARD tile's Landsat history
+directly from USGS: tile `h003v004` (central Oregon Cascades, 5000x5000 px at
+30 m), 1990-01-02 to 2026-09-26, Landsat 4/5/7/8/9, 6 SR bands + QA_PIXEL.
+Script: `bench/ard_tile_history_bench.py` (docstring explains subcommands);
+summary: `docs/benchmarks/data/ard_tile_history_h003v004.json`.
 
-Steps on the server:
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-export USGS_M2M_USERNAME=... USGS_M2M_TOKEN=...
-python bench/ard_tile_history_bench.py discover   # ~30 s; observations.json isn't in git
-python bench/ard_tile_history_bench.py pilot      # optional, ~20 min, re-baselines on this network
-tmux new -s ardrun
-python bench/ard_tile_history_bench.py run --workers 4 2>&1 | tee bench/results/ard_tile_history/h003v004/run.log
-python bench/ard_tile_history_bench.py report     # any time; run is resumable
-```
+Result (4 workers, `run --save uint16`):
+- 2,411/2,411 observations acquired, 0 permanently failed, in 10.7 h wall
+  (226 obs/h, ~16 s/obs effective)
+- 487 GB transferred; saved as uint16 GeoTIFF (original C2 SR DN, 0 = nodata,
+  scale/offset in band tags): 165 GB; peak RSS 7.5 GB
+- Per observation per worker: ~20 s download+decode, ~12 s M2M URL minting
+  (mostly queueing on the one-request-at-a-time account lock), ~16 s uint16
+  write (single-threaded deflate)
+- `net_gb_indicative` in the summary is 0.0 because the netstat counter
+  doesn't work on this server; bytes come from band file sizes instead
 
-Pilot baseline from the user's Mac (2026-09-28, 15 observations, all OK,
-0 retries):
-- 2,410 observations (LT05 730, LT04 4, LE07 843, LC08 613, LC09 220)
-- ~104 s per observation serial (LC09 slowest ~216 s); URL minting ~5%
-- 4 workers: 2.36x speedup -> ~28 h projected (~86 obs/h)
-- ~213 MB transferred per observation -> ~514 GB total; peak RSS ~3.2 GB
-- If saved as float32 deflate GeoTIFF: ~158 MB/obs -> ~380 GB
+What changed along the way:
+- `usgs_ard` full-tile reads on the native grid now download whole band files
+  in parallel and decode from memory (`_read_native_tile`): ~110 s -> ~10 s
+  per observation, bit-identical to the old /vsicurl + WarpedVRT path, which
+  is still used for subsets/other grids. The network was never the limit
+  (USGS landsatlook via CloudFront: 10-28 MB/s per stream, ~70 MB/s at 14
+  streams; `bench/bandwidth_check.py`, `bench/ard_read_path_compare.py`).
+- The 90-min M2M re-login now queues behind `_m2m_call_lock` and retries
+  RATE_LIMIT; before the fix it caused 27 failed attempts (all succeeded on
+  retry).
+- Earlier baselines, for comparison: Mac pilot (old path) projected ~28 h;
+  server pilot (old path) ~68 h; server pilot (new path) ~4.8 h, which left
+  out the write and minting costs.
 
-Open decision: `run` currently reads every observation but does **not**
-save it (timing-only; only `pilot` writes files, to `pilot_output/`). If
-the user wants to keep the imagery, pass a `save_dir` to `acquire_one` in
-`cmd_worker` (or write uint16 to roughly halve the ~380 GB) — confirm with
-the user and check free disk space first.
+## Next: price the Oregon-scale run
+Remaining levers per tile: multi-threaded GeoTIFF writes (GDAL `NUM_THREADS`)
+and more workers, bounded by M2M's one-request-at-a-time limit per account.
+Plausibly ~3-5 h per tile. Confirm with the user before any multi-tile run,
+and check free disk first (~165 GB per tile as uint16).
 
-When the run finishes: summarize `records.jsonl` and `attempts.jsonl` with
-`report`, compare against the pilot baseline above, and put a compact
-summary in `docs/benchmarks/data/` (raw results stay git-ignored).
+Server notes: credentials live in `~/.config/data-loader/usgs.env`
+(`set -a; source ...; set +a` before each command); run long jobs in tmux.
+Raw run output stays in git-ignored `bench/results/ard_tile_history/h003v004/`
+(including `imagery/`).

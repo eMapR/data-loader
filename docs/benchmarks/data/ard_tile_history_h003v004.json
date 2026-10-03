@@ -1,0 +1,75 @@
+{
+  "tile": "h003v004",
+  "period": [
+    "1990-01-01",
+    "2026-10-02"
+  ],
+  "observations": 2411,
+  "by_sensor": {
+    "LC08": {
+      "observations": 613,
+      "acquired": 613,
+      "mean_total_s": 31.2,
+      "mean_mb": 255
+    },
+    "LC09": {
+      "observations": 221,
+      "acquired": 221,
+      "mean_total_s": 28.9,
+      "mean_mb": 256
+    },
+    "LE07": {
+      "observations": 843,
+      "acquired": 843,
+      "mean_total_s": 30.8,
+      "mean_mb": 166
+    },
+    "LT04": {
+      "observations": 4,
+      "acquired": 4,
+      "mean_total_s": 32.9,
+      "mean_mb": 142
+    },
+    "LT05": {
+      "observations": 730,
+      "acquired": 730,
+      "mean_total_s": 34.2,
+      "mean_mb": 183
+    }
+  },
+  "acquired": 2411,
+  "permanently_failed": 0,
+  "failed_attempts": 27,
+  "retries_logged": 2,
+  "attempts": 2,
+  "workers": [
+    4
+  ],
+  "wall_h": 10.66,
+  "elapsed_h": 10.66,
+  "discovery_s": 21.6,
+  "obs_per_hour": 226.2,
+  "effective_s_per_obs": 15.9,
+  "per_obs_total_s": {
+    "mean": 31.7,
+    "median": 29.2,
+    "p90": 52.4
+  },
+  "mint_s": {
+    "mean": 12.01,
+    "median": 7.78,
+    "sum_h": 8.04
+  },
+  "read_s": {
+    "mean": 19.7,
+    "median": 16.8,
+    "sum_h": 13.22
+  },
+  "bytes_gb": 487.4,
+  "saved_gb": 176.8,
+  "write_s_mean": 15.7,
+  "net_gb_indicative": 0.0,
+  "peak_rss_mb": 7515,
+  "cpu_h": 12.0,
+  "mean_clear_frac": 0.362
+}
