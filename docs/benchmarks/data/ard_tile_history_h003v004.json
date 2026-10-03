@@ -48,6 +48,7 @@
   "wall_h": 10.66,
   "elapsed_h": 10.66,
   "discovery_s": 21.6,
+  "discovery_search": "0.1 deg AOI at tile center -- misses edge-sliver observations (h003v004: 2,411 of 3,885)",
   "obs_per_hour": 226.2,
   "effective_s_per_obs": 15.9,
   "per_obs_total_s": {

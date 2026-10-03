@@ -11,7 +11,8 @@ discovery count or a projection.
 
 Subcommands (all state under bench/results/ard_tile_history/<tile>/):
 
-    discover            STAC search, writes observations.json + grid.json
+    discover            STAC search of the WHOLE tile extent (filtered to this
+                        tile's grid h/v), writes observations.json + grid.json
     pilot               a few full-tile reads from each Landsat era (serial),
                         then a small concurrent batch; prints the full-run
                         runtime/storage estimate. Writes pilot.jsonl.
@@ -62,9 +63,10 @@ sys.path.insert(0, str(REPO / "bench"))
 
 TILE = "h003v004"  # 100% inside Oregon; central Cascades / east Willamette Valley
 TILE_H, TILE_V = "03", "04"
-# Small box at the tile center: ARD tiles don't overlap, so this touches
-# only h003v004 (verified: every returned item is h03/v04).
-SEARCH_BBOX = (-121.99, 44.18, -121.89, 44.28)
+# CONUS ARD grid: Albers (WGS84) upper-left corner and tile size (5000 px x
+# 30 m); matches h003v004's transform (-2115585, 2714805).
+ARD_CRS = "+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=WGS84 +units=m"
+ARD_ULX, ARD_ULY, ARD_TILE_M = -2565585.0, 3314805.0, 150_000.0
 START = date(1990, 1, 1)
 BANDS = ["blue", "green", "red", "nir", "swir1", "swir2"]  # + QA_PIXEL via pixel_cloud_mask
 OUT = REPO / "bench" / "results" / "ard_tile_history" / TILE
@@ -247,22 +249,49 @@ def acquire_one(provider, scene, grid, save_dir: Path | None = None, save_dtype:
 
 # -- subcommands -----------------------------------------------------------
 
+def tile_bbox_lonlat(h: int, v: int) -> tuple[float, float, float, float]:
+    """lon/lat bbox enclosing CONUS ARD tile (h, v), from densified edges."""
+    import numpy as np
+    from pyproj import Transformer
+    x0, y1 = ARD_ULX + h * ARD_TILE_M, ARD_ULY - v * ARD_TILE_M
+    e = np.linspace(0, ARD_TILE_M, 21)
+    xs = np.concatenate([x0 + e, x0 + e, np.full(21, x0), np.full(21, x0 + ARD_TILE_M)])
+    ys = np.concatenate([np.full(21, y1), np.full(21, y1 - ARD_TILE_M), y1 - e, y1 - e])
+    lons, lats = Transformer.from_crs(ARD_CRS, "EPSG:4326", always_xy=True).transform(xs, ys)
+    return float(min(lons)), float(min(lats)), float(max(lons)), float(max(lats))
+
+
 def cmd_discover(_args):
+    """Every observation of the tile. Searches the whole tile extent: an ARD
+    item's geometry is its data footprint, so a small AOI misses "sliver"
+    observations from neighboring WRS-2 paths that only clip the tile
+    (h003v004's first run searched a 0.1 deg center AOI and found 2,411 of
+    3,885). The grid query keeps neighboring tiles out."""
+    import pystac
     import rasterio
+    from pystac_client import Client
+    from data_loader.providers.base import SceneRef
+    from data_loader.providers.usgs_ard import COLLECTION, STAC_URL, _build_provenance
     OUT.mkdir(parents=True, exist_ok=True)
     p = _provider()
     end = date.today()
+    bbox = tile_bbox_lonlat(int(TILE_H), int(TILE_V))
     t0 = time.perf_counter()
-    refs = p.search_scenes(SEARCH_BBOX, "landsat", START, end, None, None, 101)  # 101: no cloud filter
+    items = list(Client.open(STAC_URL).search(
+        collections=[COLLECTION], bbox=bbox, datetime=f"{START.isoformat()}/{end.isoformat()}", limit=500,
+        query={"landsat:grid_horizontal": {"eq": TILE_H}, "landsat:grid_vertical": {"eq": TILE_V},
+               "landsat:grid_region": {"eq": "CU"}}).items())
     disc_s = time.perf_counter() - t0
-    refs = [r for r in refs if r.handle.properties.get("landsat:grid_horizontal") == TILE_H
-            and r.handle.properties.get("landsat:grid_vertical") == TILE_V]
+    refs = [SceneRef(id=it.id, date=it.datetime.date(), cloud_percent=it.properties.get("eo:cloud_cover"),
+                     handle=it, provenance=_build_provenance(it)) for it in items]
     refs.sort(key=lambda r: (r.date, r.id))
     (OUT / "items.json").write_text(json.dumps([r.handle.to_dict() for r in refs]))
     obs = [{"id": r.id, "date": r.date.isoformat(), "sensor": _sensor(r.id), "cloud": r.cloud_percent,
-            "scene_count": r.handle.properties.get("landsat:scene_count")} for r in refs]
+            "scene_count": r.handle.properties.get("landsat:scene_count"),
+            "fill": r.handle.properties.get("landsat:fill")} for r in refs]
     (OUT / "observations.json").write_text(json.dumps(
         {"tile": TILE, "start": START.isoformat(), "end": end.isoformat(), "discovery_s": disc_s,
+         "search": f"whole tile extent {[round(b, 3) for b in bbox]}, grid h{TILE_H}/v{TILE_V}",
          "observations": obs}, indent=1))
 
     # Native tile grid, from one observation's QA file (every tile shares it).
@@ -476,6 +505,9 @@ def cmd_report(_args):
         "wall_h": round(wall / 3600, 2),
         "elapsed_h": round((max(a["started"] + a["wall_s"] for a in atts) - min(a["started"] for a in atts)) / 3600, 2) if atts else None,
         "discovery_s": round(obs["discovery_s"], 1),
+        # Older observations.json files predate the whole-tile search.
+        "discovery_search": obs.get("search", "0.1 deg AOI at tile center -- misses edge-sliver "
+                                              "observations (h003v004: 2,411 of 3,885)"),
     }
     if okl:
         tot = [r["total_s"] for r in okl]
