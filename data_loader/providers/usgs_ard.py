@@ -644,6 +644,10 @@ class UsgsArdProvider:
         from rasterio.io import MemoryFile
         from rasterio.vrt import WarpedVRT
 
+        # Mint every band's URL here, on the caller's thread, so the
+        # download threads only hit the cache (and callers that time
+        # minting per thread still see it).
+        self._band_url(tile_product_id, needed[0], needed)
         with ThreadPoolExecutor(len(needed)) as ex:
             blobs = dict(zip(needed, ex.map(
                 lambda s: self._download_band(tile_product_id, s, needed), needed)))
