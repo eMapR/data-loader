@@ -29,61 +29,62 @@ plus `manifest.json` come out. Entry point: `python -m data_loader <config>`
 - Don't assume "open data" is free or anonymous — check (Requester Pays,
   M2M auth).
 
-## Done (2026-10-03): ARD tile history run on the server
+## Done (2026-10-04): complete ARD tile history for h003v004
 Measured the real cost of acquiring an ARD tile's Landsat history directly
 from USGS: tile `h003v004` (central Oregon Cascades, 5000x5000 px at 30 m),
-1990-01-02 to 2026-09-26, Landsat 4/5/7/8/9, 6 SR bands + QA_PIXEL.
+1990-01-01 to 2026-10-02, Landsat 4/5/7/8/9, 6 SR bands + QA_PIXEL.
 Script: `bench/ard_tile_history_bench.py` (docstring explains subcommands);
-summary: `docs/benchmarks/data/ard_tile_history_h003v004.json`.
+summary: `docs/benchmarks/data/ard_tile_history_h003v004.json` (overall and
+`by_attempt`).
 
-**Not the complete tile history.** That run's `discover` searched a 0.1 deg
-AOI at the tile center, and an ARD item's geometry is its data footprint, so
-it found 2,411 of the tile's 3,885 observations. The 1,474 it missed are edge
-"slivers" from neighboring WRS-2 paths (~92% fill; mostly LE07/LT05/LC08),
-so pixels near the tile edges lack those dates. `discover` now searches the
-whole tile extent (grid h/v filtered); re-running it would make those 1,474
-pending for a resumed `run` -- not done yet, confirm with the user first.
-
-Result for the 2,411 acquired (4 workers, `run --save uint16`):
-- 2,411/2,411 acquired, 0 permanently failed, in 10.7 h wall
-  (226 obs/h, ~16 s/obs effective)
-- 487 GB transferred; saved as uint16 GeoTIFF (original C2 SR DN, 0 = nodata,
-  scale/offset in band tags): 165 GB; peak RSS 7.5 GB
-- Per observation per worker: ~20 s download+decode, ~12 s M2M URL minting
-  (mostly queueing on the one-request-at-a-time account lock), ~16 s uint16
-  write (single-threaded deflate)
-- `net_gb_indicative` in the summary is 0.0 because the netstat counter
-  doesn't work on this server; bytes come from band file sizes instead
+Result: 3,885/3,885 observations acquired, 0 permanently failed, 14.8 h wall
+(4 workers, `--save uint16`), 523 GB transferred, 189 GB saved (uint16
+original C2 SR DN, cloud/shadow/cirrus/fill = 0 nodata, scale/offset in band
+tags; QA_PIXEL itself not saved). Done in two passes:
+- 2,411 observations found by the first discovery (a 0.1 deg center AOI):
+  10.7 h, 15.9 s/obs effective, ~202 MB/obs. Per obs per worker ~20 s
+  download+decode, ~12 s M2M minting (queueing on the one-request-at-a-time
+  account limit), ~16 s single-threaded deflate write.
+- 1,474 edge "slivers" the center AOI missed (an ARD item's geometry is its
+  data footprint; slivers are neighboring WRS-2 paths clipping the tile,
+  ~92% fill): `discover --end 2026-10-02` over the whole tile, then a
+  resumed `run --label slivers`: 4.2 h, 10.2 s/obs effective, ~24 MB/obs.
+  Center-AOI discovery kept in `.../h003v004/discovery_center_aoi/`.
+- `net_gb_indicative` is 0.0 (netstat counter doesn't work on this server);
+  bytes come from band file sizes.
 
 What changed along the way:
-- `usgs_ard` full-tile reads on the native grid now download whole band files
-  in parallel and decode from memory (`_read_native_tile`): ~110 s -> ~10 s
-  per observation, bit-identical to the old /vsicurl + WarpedVRT path, which
-  is still used for subsets/other grids. The network was never the limit
-  (USGS landsatlook via CloudFront: 10-28 MB/s per stream, ~70 MB/s at 14
-  streams; `bench/bandwidth_check.py`, `bench/ard_read_path_compare.py`).
-- The 90-min M2M re-login now queues behind `_m2m_call_lock` and retries
-  RATE_LIMIT; before the fix it caused 27 failed attempts (all succeeded on
-  retry).
-- Earlier baselines, for comparison: Mac pilot (old path) projected ~28 h;
-  server pilot (old path) ~68 h; server pilot (new path) ~4.8 h, which left
-  out the write and minting costs.
+- `usgs_ard` full-tile reads on the native grid download whole band files in
+  parallel and decode from memory (`_read_native_tile`): ~110 s -> ~10 s per
+  observation, bit-identical to the /vsicurl + WarpedVRT path (still used for
+  subsets/other grids). The network was never the limit
+  (`bench/bandwidth_check.py`, `bench/ard_read_path_compare.py`).
+- The 90-min M2M re-login queues behind `_m2m_call_lock` and retries
+  RATE_LIMIT (it caused 27 failed attempts before the fix).
+- SR fill (DN 0) is NaN, not reflectance -0.2, in `usgs_ard` and
+  `stac_common` (`masking.dn_to_reflectance`); float32 outputs written before
+  2026-10-03 still carry -0.2 fill. uint16 imagery was never affected.
 
-## Oregon-scale estimate (2026-10-03)
+## Oregon-scale estimate (2026-10-04)
 `bench/oregon_ard_estimate.py` -> `docs/benchmarks/data/oregon_ard_estimate.json`:
-scales the h003v004 run to every ARD tile touching Oregon, with per-tile
-observation counts and fill from the LandsatLook STAC (whole-tile searches).
-- 23 tiles touch Oregon (18 with >=5% Oregon share); 88,884 observations
+scales the measured h003v004 costs (15.9 s/full obs, 10.2 s/sliver, 4
+workers, uint16 save, one M2M account) to every ARD tile touching Oregon,
+with per-tile observation counts and fill from the LandsatLook STAC.
+- 23 tiles touch Oregon (18 with >=5% Oregon share); ~88,900 observations
   1990-2026, ~29k of them slivers (fill >= 80%)
-- ~11.5 TB transfer, ~4.2 TB saved as uint16
-- 250-393 h (10-16 days) on one machine and one M2M account at the measured
-  speed; range = slivers costed by data volume (low) vs. as full
-  observations (high). Floor from serial M2M minting (~4.7 s/obs): ~116 h.
-- Sliver cost is unmeasured (a live measurement was offered and declined).
+- ~11.4 TB transfer, ~4.1 TB saved as uint16
+- ~347 h (14.5 days) for all 23 tiles; ~278 h (11.6 days) for the 18.
+  Floor from serial M2M minting (~4.7 s/obs): ~116 h.
 
 Remaining levers: multi-threaded GeoTIFF writes (GDAL `NUM_THREADS`) and more
-workers, bounded by M2M's one-request-at-a-time limit per account. Confirm
-with the user before any multi-tile run, and check free disk first.
+workers, bounded by M2M's one-request-at-a-time limit per account.
+
+## Next (queued 2026-10-04): make the tile-history bench config-driven
+YAML config (tiles, dates, bands, workers, save format, output dir, and an
+option to also save QA_PIXEL) via `--config`, replacing the TILE/START/BANDS
+constants, for a multi-tile Oregon run. h003v004 results must reproduce
+through the config path. Confirm with the user before any multi-tile run,
+and check free disk first.
 
 Server notes: credentials live in `~/.config/data-loader/usgs.env`
 (`set -a; source ...; set +a` before each command); run long jobs in tmux.

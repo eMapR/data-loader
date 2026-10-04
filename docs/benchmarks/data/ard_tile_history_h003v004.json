@@ -4,75 +4,75 @@
     "1990-01-01",
     "2026-10-02"
   ],
-  "observations": 2411,
+  "observations": 3885,
   "by_sensor": {
     "LC08": {
-      "observations": 613,
-      "acquired": 613,
-      "mean_total_s": 31.2,
-      "mean_mb": 255
+      "observations": 920,
+      "acquired": 920,
+      "mean_total_s": 27.7,
+      "mean_mb": 180
     },
     "LC09": {
-      "observations": 221,
-      "acquired": 221,
-      "mean_total_s": 28.9,
-      "mean_mb": 256
+      "observations": 333,
+      "acquired": 333,
+      "mean_total_s": 25.9,
+      "mean_mb": 180
     },
     "LE07": {
-      "observations": 843,
-      "acquired": 843,
-      "mean_total_s": 30.8,
-      "mean_mb": 166
+      "observations": 1398,
+      "acquired": 1398,
+      "mean_total_s": 25.5,
+      "mean_mb": 109
     },
     "LT04": {
-      "observations": 4,
-      "acquired": 4,
-      "mean_total_s": 32.9,
-      "mean_mb": 142
+      "observations": 7,
+      "acquired": 7,
+      "mean_total_s": 27.0,
+      "mean_mb": 88
     },
     "LT05": {
-      "observations": 730,
-      "acquired": 730,
-      "mean_total_s": 34.2,
-      "mean_mb": 183
+      "observations": 1227,
+      "acquired": 1227,
+      "mean_total_s": 27.3,
+      "mean_mb": 118
     }
   },
-  "acquired": 2411,
+  "acquired": 3885,
   "permanently_failed": 0,
   "failed_attempts": 27,
-  "retries_logged": 2,
-  "attempts": 2,
+  "retries_logged": 114,
+  "attempts": 3,
   "workers": [
     4
   ],
-  "wall_h": 10.66,
-  "elapsed_h": 10.66,
-  "discovery_s": 21.6,
-  "discovery_search": "0.1 deg AOI at tile center -- misses edge-sliver observations (h003v004: 2,411 of 3,885)",
-  "obs_per_hour": 226.2,
-  "effective_s_per_obs": 15.9,
+  "wall_h": 14.83,
+  "elapsed_h": 27.38,
+  "discovery_s": 12.4,
+  "discovery_search": "whole tile extent [-123.109, 43.396, -120.788, 45.055], grid h03/v04",
+  "obs_per_hour": 262.0,
+  "effective_s_per_obs": 13.7,
   "per_obs_total_s": {
-    "mean": 31.7,
-    "median": 29.2,
-    "p90": 52.4
+    "mean": 26.6,
+    "median": 22.4,
+    "p90": 47.4
   },
   "mint_s": {
-    "mean": 12.01,
-    "median": 7.78,
-    "sum_h": 8.04
+    "mean": 9.99,
+    "median": 6.16,
+    "sum_h": 10.78
   },
   "read_s": {
-    "mean": 19.7,
-    "median": 16.8,
-    "sum_h": 13.22
+    "mean": 16.6,
+    "median": 12.8,
+    "sum_h": 17.97
   },
-  "bytes_gb": 487.4,
-  "saved_gb": 176.8,
-  "write_s_mean": 15.7,
+  "bytes_gb": 522.6,
+  "saved_gb": 189.3,
+  "write_s_mean": 12.0,
   "net_gb_indicative": 0.0,
   "peak_rss_mb": 7515,
-  "cpu_h": 12.0,
-  "mean_clear_frac": 0.362,
+  "cpu_h": 15.38,
+  "mean_clear_frac": 0.24,
   "by_attempt": [
     {
       "label": null,
@@ -111,6 +111,25 @@
       },
       "mean_mb": 228,
       "mean_saved_mb": 81.8
+    },
+    {
+      "label": "slivers",
+      "started": "2026-10-03T20:02",
+      "workers": 4,
+      "pending_at_start": 1474,
+      "ok": 1474,
+      "failed": 0,
+      "wall_h": 4.17,
+      "obs_per_hour": 353.1,
+      "mean_fill_pct": 91.6,
+      "mean_s": {
+        "total_s": 18.3,
+        "mint_s": 6.7,
+        "read_s": 11.6,
+        "write_s": 5.8
+      },
+      "mean_mb": 24,
+      "mean_saved_mb": 8.5
     }
   ]
 }

@@ -17,14 +17,14 @@ tile that touches Oregon:
 3. Data volume per observation scales with (100 - landsat:fill), using
    the run's own observations as the reference.
 
-Time range (one machine, ONE M2M account, run code as measured):
-    high   every observation costs what the run's did (15.9 s effective
-           at 4 workers): slivers as expensive as full tiles
-    low    time scales with data volume instead, but never faster than
-           one serial M2M mint per observation (~4-6 s, serial pilot) --
-           M2M allows one request at a time per account
-A sliver's real cost is in between: little data, but full minting and
-per-file overhead.
+Time (one machine, ONE M2M account, 4 workers, uint16 save), from the
+h003v004 run's per-attempt throughput (report's by_attempt):
+    full     effective s/obs of the unlabeled attempts (the 2,411 center-AOI
+             observations, mean fill ~31%)
+    sliver   effective s/obs of the `slivers` attempt (the 1,474 edge
+             slivers, mean fill ~92%), applied to every fill >= 80% obs
+Floor: one serial M2M mint per observation (~4.7 s, serial pilot), since
+M2M allows one request at a time per account.
 
     python bench/oregon_ard_estimate.py
 
@@ -114,8 +114,11 @@ def main():
     run_items = json.loads((TILE_DIR / "items.json").read_text())
     run_data = sum(1 - (it["properties"].get("landsat:fill") or 0) / 100 for it in run_items)
     gb_per_data, saved_gb_per_data = run["bytes_gb"] / run_data, run["saved_gb"] / run_data
-    s_per_obs = 3600 / run["obs_per_hour"]
-    s_per_data = run["wall_h"] * 3600 / run_data
+
+    def s_per_obs(attempts):
+        return sum(a["wall_h"] for a in attempts) * 3600 / sum(a["ok"] for a in attempts)
+    s_full = s_per_obs([a for a in run["by_attempt"] if a["label"] != "slivers"])
+    s_sliver = s_per_obs([a for a in run["by_attempt"] if a["label"] == "slivers"])
 
     tiles = oregon_tiles(grid["crs_wkt"])
     client = Client.open(STAC_URL)
@@ -128,22 +131,22 @@ def main():
                      "data_equiv": round(data, 1),
                      "est_transfer_gb": round(data * gb_per_data, 1),
                      "est_saved_gb": round(data * saved_gb_per_data, 1),
-                     "hours_high": round(len(fills) * s_per_obs / 3600, 2),
-                     "hours_low": round(max(data * s_per_data, len(fills) * mint_s) / 3600, 2)})
+                     "hours": round(sum(s_sliver if f >= SLIVER_FILL else s_full for f in fills) / 3600, 2),
+                     "hours_m2m_floor": round(len(fills) * mint_s / 3600, 2)})
 
     def totals(rs):
         return {"tiles": len(rs), "observations": sum(r["observations"] for r in rs),
                 "slivers": sum(r["slivers"] for r in rs),
                 "transfer_tb": round(sum(r["est_transfer_gb"] for r in rs) / 1e3, 2),
                 "saved_uint16_tb": round(sum(r["est_saved_gb"] for r in rs) / 1e3, 2),
-                "hours_low": round(sum(r["hours_low"] for r in rs), 1),
-                "hours_high": round(sum(r["hours_high"] for r in rs), 1)}
+                "hours": round(sum(r["hours"] for r in rs), 1),
+                "hours_m2m_floor": round(sum(r["hours_m2m_floor"] for r in rs), 1)}
 
     summary = {
-        "basis": f"{run['tile']} run: {run['acquired']} obs in {run['wall_h']} h ({run['obs_per_hour']} obs/h, 4 workers)",
+        "basis": f"{run['tile']} run: {run['acquired']} obs in {run['wall_h']} h, 4 workers, uint16 save",
         "period": [start, end],
         "boundary": "PublicaMundi us-states GeoJSON (generalized), rasterized at 1 km in ARD Albers",
-        "model": {"s_per_obs_high": round(s_per_obs, 2), "s_per_full_tile_equiv_low": round(s_per_data, 2),
+        "model": {"s_per_full_obs": round(s_full, 2), "s_per_sliver": round(s_sliver, 2),
                   "m2m_mint_floor_s_per_obs": round(mint_s, 2), "sliver_fill_threshold": SLIVER_FILL},
         "all_tiles": totals(rows),
         "tiles_ge_5pct_oregon": totals([r for r in rows if r["oregon_share"] >= 0.05]),
@@ -151,15 +154,16 @@ def main():
     }
     OUT.write_text(json.dumps(summary, indent=1))
 
-    print(f"{'tile':<10}{'OR':>5}{'obs':>6}{'slivers':>8}{'xfer GB':>8}{'saved GB':>9}{'hours':>12}")
+    print(f"{'tile':<10}{'OR':>5}{'obs':>6}{'slivers':>8}{'xfer GB':>8}{'saved GB':>9}{'hours':>7}")
     for r in rows:
         print(f"{r['tile']:<10}{r['oregon_share']:>5.2f}{r['observations']:>6}{r['slivers']:>8}"
-              f"{r['est_transfer_gb']:>8.0f}{r['est_saved_gb']:>9.0f}{r['hours_low']:>6.1f}-{r['hours_high']:<5.1f}")
+              f"{r['est_transfer_gb']:>8.0f}{r['est_saved_gb']:>9.0f}{r['hours']:>7.1f}")
     for name in ("all_tiles", "tiles_ge_5pct_oregon"):
         t = summary[name]
         print(f"{name}: {t['tiles']} tiles, {t['observations']} obs ({t['slivers']} slivers), "
               f"~{t['transfer_tb']} TB transfer, ~{t['saved_uint16_tb']} TB saved, "
-              f"{t['hours_low']}-{t['hours_high']} h ({t['hours_low'] / 24:.1f}-{t['hours_high'] / 24:.1f} days)")
+              f"{t['hours']} h ({t['hours'] / 24:.1f} days; M2M floor {t['hours_m2m_floor']} h)")
+    print(f"model: {s_full:.1f} s/full obs, {s_sliver:.1f} s/sliver (effective, 4 workers)")
     print(f"wrote {OUT.relative_to(REPO)}")
 
 
