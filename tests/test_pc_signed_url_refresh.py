@@ -286,5 +286,22 @@ class EarthSearchUnaffectedTests(unittest.TestCase):
         self.assertEqual(len(open_calls), 1)  # no retry attempted
 
 
+class FillIsNanTests(unittest.TestCase):
+    def test_dn_zero_fill_becomes_nan_not_offset(self):
+        """Landsat C2 SR DN 0 is fill; it must not come out as -0.2."""
+        class FillVRT(_FakeVRT):
+            def read(self, band):
+                arr = np.full((2, 2), 10000, dtype="uint16")
+                arr[0, 1] = 0
+                return arr
+
+        with patch("planetary_computer.sign", side_effect=lambda href, copy=True: href), \
+             patch("rasterio.open", return_value=_FakeSrc()), \
+             patch("rasterio.vrt.WarpedVRT", FillVRT):
+            out = _pc_provider().read_scene_bands(_scene(), "landsat", ["blue"], _grid(), pixel_cloud_mask=False)
+        self.assertTrue(np.isnan(out["blue"][0, 1]))
+        self.assertAlmostEqual(float(out["blue"][0, 0]), 10000 * 2.75e-5 - 0.2, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()

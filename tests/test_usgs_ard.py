@@ -709,8 +709,8 @@ class NativeTileReadTests(unittest.TestCase):
         out, _, _ = self._read(scene, grid, lambda url, timeout: self._response(
             200, files["qa" if "QA_PIXEL" in url else "band"]), bands=("blue",), pixel_cloud_mask=False)
         self.assertEqual(out["blue"].shape, (4, 4))
-        # Left two columns fall outside the shifted file -> nodata, not data.
-        self.assertTrue(np.allclose(out["blue"][:, :2], 0 * 2.75e-5 - 0.2))
+        # Left two columns fall outside the shifted file -> nodata (NaN), not data.
+        self.assertTrue(np.isnan(out["blue"][:, :2]).all())
         self.assertTrue(np.allclose(out["blue"][:, 2:], 10000 * 2.75e-5 - 0.2))
 
     def test_expired_signature_reminted_once(self):
@@ -829,6 +829,46 @@ class LoginTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "login-token failed.*RATE_LIMIT"):
                 provider._ensure_login()
         self.assertEqual(session.post.call_count, 2)
+
+
+class FillIsNanTests(unittest.TestCase):
+    """DN 0 (fill) must come out as NaN, not reflectance -0.2, on both read
+    paths and regardless of pixel_cloud_mask. Found 2026-10-03: engine
+    output carried fill as -0.2, into composites and indices."""
+
+    def test_vsicurl_path(self):
+        class FillVRT(ReadSceneBandsTests._FakeVRT):
+            def read(self, band):
+                arr = np.full((2, 2), 10000, dtype="uint16")
+                arr[1, 1] = 0
+                return arr
+
+        def fake_open(path):
+            m = MagicMock()
+            m.__enter__ = lambda s: "band"
+            m.__exit__ = lambda *a: False
+            return m
+
+        provider = UsgsArdProvider(username="u", token="t")
+        with patch.object(UsgsArdProvider, "_signed_band_urls",
+                          side_effect=lambda t, s: {x: f"https://signed/{x}" for x in s}), \
+             patch("rasterio.open", side_effect=fake_open), \
+             patch("rasterio.vrt.WarpedVRT", FillVRT):
+            out = provider.read_scene_bands(_scene(), "landsat", ["blue"], _grid(), False)
+        self.assertTrue(np.isnan(out["blue"][1, 1]))
+        self.assertFalse(np.isnan(out["blue"][0, 0]))
+
+    def test_native_whole_file_path(self):
+        t = NativeTileReadTests()
+        scene, grid = t._native()
+        band = np.full((4, 4), 10000, dtype="uint16")
+        band[3, 3] = 0
+        blob = t._tif(band, grid.transform)
+        out, _, _ = t._read(scene, grid, lambda url, timeout: t._response(200, blob),
+                            bands=("blue",), pixel_cloud_mask=False)
+        self.assertTrue(np.isnan(out["blue"][3, 3]))
+        self.assertEqual(int(np.isnan(out["blue"]).sum()), 1)
+        self.assertFalse(np.any(np.isclose(out["blue"], -0.2)))
 
 
 if __name__ == "__main__":

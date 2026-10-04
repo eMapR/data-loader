@@ -19,7 +19,7 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from data_loader.masking import MASKS
+from data_loader.masking import MASKS, dn_to_reflectance
 from data_loader.product_contract import (
     ESA_S2_L2A,
     SCENE,
@@ -492,7 +492,7 @@ class StacProvider:
         out: dict[str, np.ndarray] = {}
         for b in bands:
             dn = read_asset(spec.band_map[b], Resampling.bilinear)
-            out[b] = dn.astype("f4") * spec.sr_scale + spec.sr_offset
+            out[b] = dn_to_reflectance(dn, spec.sr_scale, spec.sr_offset)
 
         if pixel_cloud_mask:
             qa = read_asset(spec.band_map["qa"], Resampling.nearest)

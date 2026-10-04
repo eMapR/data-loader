@@ -10,8 +10,17 @@ from __future__ import annotations
 import numpy as np
 
 # Collection 2 Level-2 QA_PIXEL bits: 1=dilated cloud, 2=cirrus, 3=cloud,
-# 4=cloud shadow. Bit 0 (fill) is already implied by nodata elsewhere.
+# 4=cloud shadow. Bit 0 (fill) is not a cloud-mask choice: fill is masked
+# unconditionally from the SR bands themselves (dn_to_reflectance), so it
+# becomes NaN even with pixel_cloud_mask off.
 LANDSAT_QA_BAD_BITS = (1, 2, 3, 4)
+
+# Surface-reflectance DN 0 is fill/nodata for Landsat C2 SR and Sentinel-2
+# L2A alike: their SR COGs declare nodata=0 (checked 2026-10-03 on USGS ARD
+# and Planetary Computer files), and valid C2 SR DN starts at 7273. GDAL's
+# WarpedVRT honors that nodata, so warped reads also return 0 where there is
+# no valid source pixel.
+SR_FILL_DN = 0
 
 # Sentinel-2 Scene Classification (SCL) values: 3=cloud shadow,
 # 8/9=cloud medium/high probability, 10=thin cirrus.
@@ -25,6 +34,15 @@ SENTINEL2_SCL_BAD_VALUES = (3, 8, 9, 10)
 # classes, 15=land (dup of 1), 16=dup of 11, 17=dup of 14. Keep only clear
 # land/water.
 GLAD_ARD_QA_GOOD_VALUES = (1, 2, 15)
+
+
+def dn_to_reflectance(dn: np.ndarray, scale: float, offset: float) -> np.ndarray:
+    """SR DN -> float32 reflectance, with fill (DN 0) as NaN. Without this,
+    fill came out as `offset` (-0.2 for Landsat C2, 0.0 for Sentinel-2) and
+    passed through composites and indices as if it were real reflectance."""
+    out = dn.astype("f4") * scale + offset
+    out[dn == SR_FILL_DN] = np.nan
+    return out
 
 
 def glad_ard_qa_mask(qa: np.ndarray, good_values=GLAD_ARD_QA_GOOD_VALUES) -> np.ndarray:

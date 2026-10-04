@@ -90,7 +90,7 @@ from typing import Optional
 
 import numpy as np
 
-from data_loader.masking import landsat_qa_mask
+from data_loader.masking import dn_to_reflectance, landsat_qa_mask
 from data_loader.product_contract import (
     SCENE,
     USGS_ARD_SR,
@@ -596,8 +596,7 @@ class UsgsArdProvider:
 
         out: dict[str, np.ndarray] = {}
         for b in bands:
-            dn = read(suffix_for[b])
-            out[b] = dn.astype("f4") * SR_SCALE + SR_OFFSET
+            out[b] = dn_to_reflectance(read(suffix_for[b]), SR_SCALE, SR_OFFSET)
 
         if pixel_cloud_mask:
             qa = read(suffix_for["qa"])

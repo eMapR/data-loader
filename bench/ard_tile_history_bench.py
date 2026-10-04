@@ -229,9 +229,10 @@ def acquire_one(provider, scene, grid, save_dir: Path | None = None, save_dtype:
         return rec
     total = time.perf_counter() - t0
     rec.update(ok=True, total_s=total, mint_s=tl.mint_s, read_s=total - tl.mint_s,
-               # usgs_ard leaves DN-0 fill as exactly SR_OFFSET (-0.2), not NaN,
-               # so exclude it explicitly: clear = not QA-masked AND not fill.
-               clear_frac=float(np.mean(~np.isnan(arrays["nir"]) & ~np.isclose(arrays["nir"], -0.2, atol=1e-6))),
+               # clear = neither QA-masked nor fill (both NaN). Records written
+               # before fill became NaN (2026-10-03) excluded -0.2 explicitly;
+               # the result is the same.
+               clear_frac=float(np.mean(~np.isnan(arrays["nir"]))),
                fill_pct=(scene.handle.properties.get("landsat:fill") if scene.handle is not None else None))
     rec["bytes"] = _file_sizes(provider, scene.id)
     if save_dir is not None:
