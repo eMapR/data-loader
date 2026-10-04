@@ -72,5 +72,45 @@
   "net_gb_indicative": 0.0,
   "peak_rss_mb": 7515,
   "cpu_h": 12.0,
-  "mean_clear_frac": 0.362
+  "mean_clear_frac": 0.362,
+  "by_attempt": [
+    {
+      "label": null,
+      "started": "2026-10-02T20:50",
+      "workers": 4,
+      "pending_at_start": 2411,
+      "ok": 2384,
+      "failed": 27,
+      "wall_h": 10.53,
+      "obs_per_hour": 226.4,
+      "mean_fill_pct": 31.1,
+      "mean_s": {
+        "total_s": 31.7,
+        "mint_s": 12.0,
+        "read_s": 19.7,
+        "write_s": 15.7
+      },
+      "mean_mb": 202,
+      "mean_saved_mb": 73.2
+    },
+    {
+      "label": null,
+      "started": "2026-10-03T07:22",
+      "workers": 4,
+      "pending_at_start": 27,
+      "ok": 27,
+      "failed": 0,
+      "wall_h": 0.13,
+      "obs_per_hour": 215.2,
+      "mean_fill_pct": 25.3,
+      "mean_s": {
+        "total_s": 32.9,
+        "mint_s": 13.1,
+        "read_s": 19.8,
+        "write_s": 13.4
+      },
+      "mean_mb": 228,
+      "mean_saved_mb": 81.8
+    }
+  ]
 }

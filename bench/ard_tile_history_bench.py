@@ -11,12 +11,15 @@ discovery count or a projection.
 
 Subcommands (all state under bench/results/ard_tile_history/<tile>/):
 
-    discover            STAC search of the WHOLE tile extent (filtered to this
-                        tile's grid h/v), writes observations.json + grid.json
+    discover [--end YYYY-MM-DD]
+                        STAC search of the WHOLE tile extent (filtered to this
+                        tile's grid h/v), writes observations.json + grid.json.
+                        --end (default today) pins the period, e.g. to add
+                        observations to an earlier run without new dates.
     pilot               a few full-tile reads from each Landsat era (serial),
                         then a small concurrent batch; prints the full-run
                         runtime/storage estimate. Writes pilot.jsonl.
-    run [--workers N] [--save uint16|float32|none]
+    run [--workers N] [--save uint16|float32|none] [--label TEXT]
                         the complete acquisition. Resumable: every finished
                         observation is appended to records.jsonl as it
                         completes; re-running skips those. The orchestrator
@@ -25,7 +28,9 @@ Subcommands (all state under bench/results/ard_tile_history/<tile>/):
                         imagery/: uint16 = the original C2 SR DN (lossless
                         inverse of scale/offset, 0 = nodata/fill/QA-masked,
                         scale/offset in the band tags), ~half of float32.
-    report              summarizes records.jsonl/attempts.jsonl (targeted output)
+                        --label tags this run's attempts in attempts.jsonl.
+    report              summarizes records.jsonl/attempts.jsonl (targeted
+                        output), overall and per attempt
 
 Timing split per observation:
     mint_s  M2M `download-options` + `download-request` for the 7 band
@@ -262,7 +267,7 @@ def tile_bbox_lonlat(h: int, v: int) -> tuple[float, float, float, float]:
     return float(min(lons)), float(min(lats)), float(max(lons)), float(max(lats))
 
 
-def cmd_discover(_args):
+def cmd_discover(args):
     """Every observation of the tile. Searches the whole tile extent: an ARD
     item's geometry is its data footprint, so a small AOI misses "sliver"
     observations from neighboring WRS-2 paths that only clip the tile
@@ -275,7 +280,7 @@ def cmd_discover(_args):
     from data_loader.providers.usgs_ard import COLLECTION, STAC_URL, _build_provenance
     OUT.mkdir(parents=True, exist_ok=True)
     p = _provider()
-    end = date.today()
+    end = date.fromisoformat(args.end) if args.end else date.today()
     bbox = tile_bbox_lonlat(int(TILE_H), int(TILE_V))
     t0 = time.perf_counter()
     items = list(Client.open(STAC_URL).search(
@@ -424,7 +429,7 @@ def cmd_run(args):
             print("nothing pending -- run complete"); break
         print(f"[attempt {attempt}] {len(pending)} observations pending", flush=True)
         rc = subprocess.run([sys.executable, __file__, "_worker", "--workers", str(args.workers),
-                             "--save", args.save]).returncode
+                             "--save", args.save] + (["--label", args.label] if args.label else [])).returncode
         if rc != 0:
             print(f"[attempt {attempt}] worker exited {rc} (killed?) -- resuming", flush=True)
             time.sleep(10)
@@ -449,7 +454,7 @@ def cmd_worker(args):
     sys.stdout = counter = _CountingStdout(sys.stdout)
     lock = threading.Lock()
     attempt = {"started": time.time(), "workers": args.workers, "pending_at_start": len(pending),
-               "save": args.save}
+               "save": args.save, "label": args.label}
     save_dir = None if args.save == "none" else OUT / "imagery"
     net0 = _net_bytes()
     t0 = time.perf_counter()
@@ -539,6 +544,24 @@ def cmd_report(_args):
                 "acquired": len(rs),
                 "mean_total_s": round(st.mean(r["total_s"] for r in rs), 1) if rs else None,
                 "mean_mb": round(st.mean((r.get("bytes") or 0) for r in rs) / 1e6) if rs else None}
+    # Per attempt: a record belongs to the attempt whose time window holds
+    # its t_end (attempts run one after another, never concurrently).
+    summ["by_attempt"] = []
+    for a in atts:
+        rs = [r for r in recs if a["started"] <= r.get("t_end", 0) <= a["started"] + a["wall_s"] + 1]
+        ok_a = [r for r in rs if r["ok"]]
+        summ["by_attempt"].append({
+            "label": a.get("label"), "started": time.strftime("%Y-%m-%dT%H:%M", time.localtime(a["started"])),
+            "workers": a["workers"], "pending_at_start": a["pending_at_start"], "ok": len(ok_a),
+            "failed": len(rs) - len(ok_a), "wall_h": round(a["wall_s"] / 3600, 2),
+            "obs_per_hour": round(len(ok_a) / (a["wall_s"] / 3600), 1) if a["wall_s"] else None,
+            "mean_fill_pct": round(st.mean(r["fill_pct"] for r in ok_a if r.get("fill_pct") is not None), 1)
+                if any(r.get("fill_pct") is not None for r in ok_a) else None,
+            "mean_s": {k: round(st.mean(r[k] for r in ok_a if k in r), 1)
+                       for k in ("total_s", "mint_s", "read_s", "write_s") if any(k in r for r in ok_a)},
+            "mean_mb": round(st.mean((r.get("bytes") or 0) for r in ok_a) / 1e6) if ok_a else None,
+            "mean_saved_mb": round(st.mean((r.get("saved_bytes") or 0) for r in ok_a) / 1e6, 1) if ok_a else None,
+        })
     out = REPO / "docs" / "benchmarks" / "data" / f"ard_tile_history_{TILE}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(summ, indent=2) + "\n")
@@ -548,13 +571,14 @@ def cmd_report(_args):
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("discover")
+    d = sub.add_parser("discover"); d.add_argument("--end", help="YYYY-MM-DD, default today")
     sub.add_parser("pilot")
     sub.add_parser("estimate")
     r = sub.add_parser("run"); r.add_argument("--workers", type=int, default=4); r.add_argument("--max-attempts", type=int, default=50)
     w = sub.add_parser("_worker"); w.add_argument("--workers", type=int, default=4)
     for sp in (r, w):
         sp.add_argument("--save", choices=["uint16", "float32", "none"], default="uint16")
+        sp.add_argument("--label", help="tag for this run's attempts in attempts.jsonl")
     sub.add_parser("report")
     a = ap.parse_args()
     {"discover": cmd_discover, "pilot": cmd_pilot, "estimate": lambda _a: estimate(), "run": cmd_run,
