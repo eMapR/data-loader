@@ -871,5 +871,40 @@ class FillIsNanTests(unittest.TestCase):
         self.assertFalse(np.any(np.isclose(out["blue"], -0.2)))
 
 
+class KeepQaTests(unittest.TestCase):
+    """keep_qa=True returns the raw QA_PIXEL (for the tile-history bench to
+    save); cloud masking stays governed by pixel_cloud_mask alone."""
+
+    def _read(self, pixel_cloud_mask):
+        t = NativeTileReadTests()
+        scene, grid = t._native()
+        files = t._files(grid.transform)
+        provider = UsgsArdProvider(username="u", token="t")
+        with patch.object(UsgsArdProvider, "_signed_band_urls",
+                          side_effect=lambda tid, s: {x: f"https://signed/{tid}_{x}.TIF" for x in s}), \
+             patch("requests.get", side_effect=lambda url, timeout: t._response(
+                 200, files["qa" if "QA_PIXEL" in url else "band"])):
+            return provider.read_scene_bands(scene, "landsat", ["blue"], grid, pixel_cloud_mask, keep_qa=True)
+
+    def test_returns_raw_qa_and_still_masks(self):
+        out = self._read(pixel_cloud_mask=True)
+        self.assertEqual(out["qa_pixel"].dtype, np.uint16)
+        self.assertEqual(int(out["qa_pixel"][0, 0]), 1 << 3)
+        self.assertTrue(np.isnan(out["blue"][0, 0]))
+
+    def test_qa_without_cloud_mask_leaves_cloud_pixels(self):
+        out = self._read(pixel_cloud_mask=False)
+        self.assertEqual(int(out["qa_pixel"][0, 0]), 1 << 3)
+        self.assertFalse(np.isnan(out["blue"][0, 0]))
+
+    def test_default_has_no_qa_key(self):
+        t = NativeTileReadTests()
+        scene, grid = t._native()
+        files = t._files(grid.transform)
+        out, _, _ = t._read(scene, grid, lambda url, timeout: t._response(
+            200, files["qa" if "QA_PIXEL" in url else "band"]))
+        self.assertNotIn("qa_pixel", out)
+
+
 if __name__ == "__main__":
     unittest.main()

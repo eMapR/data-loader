@@ -550,7 +550,12 @@ class UsgsArdProvider:
                 self._signed_url_cache[(tile_product_id, s)] = u
             return self._signed_url_cache[key]
 
-    def read_scene_bands(self, scene: SceneRef, sensor: str, bands, grid: Grid, pixel_cloud_mask: bool):
+    def read_scene_bands(self, scene: SceneRef, sensor: str, bands, grid: Grid, pixel_cloud_mask: bool,
+                         keep_qa: bool = False):
+        """Reflectance for `bands` (fill and, with pixel_cloud_mask, QA-flagged
+        pixels as NaN). keep_qa=True also returns the raw QA_PIXEL bitmask as
+        out["qa_pixel"] (uint16, unscaled) -- for callers that store it, e.g.
+        bench/ard_tile_history_bench.py; the engine doesn't use it."""
         import rasterio
         from rasterio.enums import Resampling
         from rasterio.vrt import WarpedVRT
@@ -560,7 +565,7 @@ class UsgsArdProvider:
         tile_product_id = _tile_product_id(scene.id)
         suffix_for = band_file_suffixes(tile_product_id)
         needed = [suffix_for[b] for b in bands]
-        if pixel_cloud_mask:
+        if pixel_cloud_mask or keep_qa:
             needed = needed + [suffix_for["qa"]]
 
         def read_asset(suffix, resampling):
@@ -586,7 +591,7 @@ class UsgsArdProvider:
                     raise
 
         resampling = {suffix_for[b]: Resampling.bilinear for b in bands}
-        if pixel_cloud_mask:
+        if pixel_cloud_mask or keep_qa:
             resampling[suffix_for["qa"]] = Resampling.nearest
         if _is_native_tile_grid(scene, grid):
             dn_by_suffix = self._read_native_tile(tile_product_id, needed, grid, resampling)
@@ -598,11 +603,13 @@ class UsgsArdProvider:
         for b in bands:
             out[b] = dn_to_reflectance(read(suffix_for[b]), SR_SCALE, SR_OFFSET)
 
+        qa = read(suffix_for["qa"]) if (pixel_cloud_mask or keep_qa) else None
         if pixel_cloud_mask:
-            qa = read(suffix_for["qa"])
             bad = landsat_qa_mask(qa)
             for arr in out.values():
                 arr[bad] = np.nan
+        if keep_qa:
+            out["qa_pixel"] = qa.astype("uint16")
         return out
 
 

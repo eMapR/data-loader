@@ -1,0 +1,50 @@
+# Template: complete Landsat ARD history for every CONUS ARD tile touching
+# Oregon (23 tiles, from bench/oregon_ard_estimate.py; Oregon share in the
+# comments). Estimated ~88,900 observations, ~11.4 TB transfer, ~4.1 TB
+# saved as uint16 (+QA_PIXEL adds a little), ~14.5 days on one M2M account
+# at 4 workers -- see docs/benchmarks/data/oregon_ard_estimate.json.
+# NOT RUN YET: confirm the tile list, end date and free disk space on the
+# output volume first. Tiles are processed in the order listed; `run` is
+# resumable per tile.
+
+tiles:
+  # >= 50% Oregon
+  - h003v004   # 1.00 (done in the benchmark: bench/configs/ard_tile_history_h003v004.yaml)
+  - h003v005   # 1.00
+  - h004v004   # 1.00
+  - h004v005   # 1.00
+  - h005v004   # 1.00
+  - h005v005   # 0.94
+  - h002v005   # 0.92
+  - h002v004   # 0.77
+  - h003v003   # 0.71
+  - h005v006   # 0.52
+  # 5-50% Oregon
+  - h004v006   # 0.49
+  - h004v003   # 0.39
+  - h002v003   # 0.34
+  - h005v003   # 0.32
+  - h006v004   # 0.30
+  - h003v006   # 0.22
+  - h001v005   # 0.11
+  - h006v003   # 0.07
+  # < 5% Oregon (drop these to save ~18k observations / ~0.8 TB)
+  - h003v002   # 0.04
+  - h002v002   # 0.02
+  - h006v005   # 0.01
+  - h002v006   # 0.01
+  - h001v004   # 0.00
+
+date_range:
+  start: "1990-01-01"
+  end: "2026-10-02"          # pin before starting; omit for "today" at discover time
+
+bands: [blue, green, red, nir, swir1, swir2]
+cloud_mask: true
+save:
+  format: uint16
+  qa_pixel: true             # keep QA_PIXEL so masking can be redone and cloud told apart from fill
+workers: 4
+max_fails_per_obs: 3
+output_dir: bench/results/ard_tile_history
+summary_dir: docs/benchmarks/data

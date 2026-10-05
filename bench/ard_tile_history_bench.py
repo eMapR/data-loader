@@ -1,39 +1,47 @@
 #!/usr/bin/env python
-"""How expensive is it to acquire one complete Oregon ARD tile's Landsat
-history directly from USGS?
+"""Acquire the complete Landsat history of one or more CONUS ARD tiles
+directly from USGS, and measure what it costs.
 
-Direct-USGS (M2M-minted signed URLs -> COG reads) only. For every Landsat
-observation of one full 5000x5000 ARD tile from 1990-01-01 to the discovery
-date, acquires blue/green/red/nir/swir1/swir2 + QA_PIXEL through
-DataLoader's own `usgs_ard.read_scene_bands` path (read onto the tile's
-native grid, QA-masked, float32 reflectance) -- a real acquisition, not a
-discovery count or a projection.
+Config-driven: a YAML/JSON file names the tiles, date range, bands, save
+format and workers (see bench/configs/ard_tile_history_h003v004.yaml for
+every key). Direct-USGS (M2M-minted signed URLs -> COG reads) only: every
+observation goes through DataLoader's own `usgs_ard.read_scene_bands` path
+onto the tile's native grid -- a real acquisition, not a discovery count or
+a projection.
 
-Subcommands (all state under bench/results/ard_tile_history/<tile>/):
+    python bench/ard_tile_history_bench.py <subcommand> --config CFG [--tile hHHHvVVV]
 
-    discover [--end YYYY-MM-DD]
-                        STAC search of the WHOLE tile extent (filtered to this
-                        tile's grid h/v), writes observations.json + grid.json.
-                        --end (default today) pins the period, e.g. to add
-                        observations to an earlier run without new dates.
-    pilot               a few full-tile reads from each Landsat era (serial),
-                        then a small concurrent batch; prints the full-run
-                        runtime/storage estimate. Writes pilot.jsonl.
-    run [--workers N] [--save uint16|float32|none] [--label TEXT]
-                        the complete acquisition. Resumable: every finished
-                        observation is appended to records.jsonl as it
-                        completes; re-running skips those. The orchestrator
-                        re-launches the worker process if it is killed.
-                        --save (default uint16) keeps each observation in
-                        imagery/: uint16 = the original C2 SR DN (lossless
-                        inverse of scale/offset, 0 = nodata/fill/QA-masked,
-                        scale/offset in the band tags), ~half of float32.
-                        --label tags this run's attempts in attempts.jsonl.
-    report              summarizes records.jsonl/attempts.jsonl (targeted
-                        output), overall and per attempt
+Subcommands (state per tile under <output_dir>/<tile>/; --tile limits a
+multi-tile config to one tile, otherwise tiles are processed in order):
+
+    discover    STAC search of the WHOLE tile extent (filtered to the tile's
+                grid h/v) over date_range; writes observations.json,
+                items.json, grid.json. date_range.end omitted = today.
+    pilot       a few full-tile reads from each Landsat era (serial), then a
+                small concurrent batch; prints the full-run runtime/storage
+                estimate. Writes pilot.jsonl.
+    run [--label TEXT]
+                the acquisition. Resumable: every finished observation is
+                appended to records.jsonl as it completes; re-running skips
+                those. The orchestrator re-launches the worker process if it
+                is killed. --label tags this run's attempts in attempts.jsonl.
+    report      summarizes records.jsonl/attempts.jsonl (targeted output),
+                overall and per attempt; writes <summary_dir>/
+                ard_tile_history_<tile>.json when summary_dir is set.
+
+Saved imagery (save.format, into <output_dir>/<tile>/imagery/):
+    uint16   the original C2 SR DN (lossless inverse of scale/offset;
+             0 = nodata: fill, and QA-masked pixels when cloud_mask is on;
+             scale/offset in the band tags), ~half of float32
+    float32  reflectance, NaN nodata (DataLoader's engine writer)
+    none     timing only
+save.qa_pixel adds the raw QA_PIXEL bitmask as a last band named qa_pixel
+(unscaled), so masking can be redone later and cloud can be told apart
+from fill. With cloud_mask off and qa_pixel on, nothing is masked except
+fill, and no information is lost.
 
 Timing split per observation:
-    mint_s  M2M `download-options` + `download-request` for the 7 band
+    mint_s  M2M `download-options` + `download-request` for the band
             files, INCLUDING time spent queued on the provider's
             one-request-at-a-time M2M lock (that wait is a real cost of the
             M2M restriction under concurrency, so it's attributed to minting)
@@ -41,9 +49,8 @@ Timing split per observation:
             for native-grid tile reads -- see usgs_ard._read_native_tile),
             decoding, QA masking, scale/offset
 Bytes: each band file's size from a 1-byte Range GET (Content-Range), i.e.
-what a full-tile read transfers (COG overviews aren't read, so this is a
-slight upper bound); plus a machine-wide `netstat` delta per attempt as a
-cross-check.
+what a full-tile read transfers; plus a machine-wide `netstat` delta per
+attempt as a cross-check.
 """
 from __future__ import annotations
 
@@ -59,6 +66,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -66,17 +74,13 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "bench"))
 
-TILE = "h003v004"  # 100% inside Oregon; central Cascades / east Willamette Valley
-TILE_H, TILE_V = "03", "04"
 # CONUS ARD grid: Albers (WGS84) upper-left corner and tile size (5000 px x
 # 30 m); matches h003v004's transform (-2115585, 2714805).
 ARD_CRS = "+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=WGS84 +units=m"
 ARD_ULX, ARD_ULY, ARD_TILE_M = -2565585.0, 3314805.0, 150_000.0
-START = date(1990, 1, 1)
-BANDS = ["blue", "green", "red", "nir", "swir1", "swir2"]  # + QA_PIXEL via pixel_cloud_mask
-OUT = REPO / "bench" / "results" / "ard_tile_history" / TILE
+CANONICAL_BANDS = ("blue", "green", "red", "nir", "swir1", "swir2")
+SAVE_FORMATS = ("uint16", "float32", "none")
 RETRY_MARKERS = ("re-minting and retrying", "rate-limit retry", "transport retry", "STAC search retry")
-MAX_FAILS_PER_OBS = 3
 
 # Pilot: one observation nearest each target date, per Landsat era.
 PILOT_ERAS = [
@@ -87,6 +91,104 @@ PILOT_ERAS = [
 PILOT_BATCH_DATES = [date(1992, 8, 1), date(1998, 8, 1), date(2004, 8, 1), date(2010, 8, 1),
                      date(2013, 8, 1), date(2019, 8, 1), date(2022, 8, 1), date(2025, 8, 1)]
 PILOT_BATCH_WORKERS = 4
+
+
+# -- config ----------------------------------------------------------------
+
+@dataclass(frozen=True)
+class RunConfig:
+    tiles: tuple[str, ...]
+    start: date
+    end: date | None  # None = today, at discover time
+    bands: tuple[str, ...]
+    save_format: str
+    save_qa_pixel: bool
+    cloud_mask: bool
+    workers: int
+    max_fails_per_obs: int
+    output_dir: Path
+    summary_dir: Path | None
+
+
+_TOP_KEYS = {"tiles", "date_range", "bands", "save", "cloud_mask", "workers", "max_fails_per_obs",
+             "output_dir", "summary_dir"}
+
+
+def _repo_path(p) -> Path:
+    p = Path(p)
+    return p if p.is_absolute() else REPO / p
+
+
+def parse_tile(tile: str) -> tuple[int, int]:
+    m = re.fullmatch(r"h(\d{3})v(\d{3})", tile)
+    if not m:
+        raise ValueError(f"tile {tile!r}: expected CONUS ARD id like 'h003v004'")
+    return int(m.group(1)), int(m.group(2))
+
+
+def load_config(path) -> RunConfig:
+    """YAML/JSON -> RunConfig. Unknown keys are errors (a typo must not
+    silently fall back to a default on a multi-day run)."""
+    path = Path(path)
+    raw = path.read_text()
+    if path.suffix in (".yaml", ".yml"):
+        import yaml
+        data = yaml.safe_load(raw)
+    elif path.suffix == ".json":
+        data = json.loads(raw)
+    else:
+        raise ValueError(f"unsupported config extension {path.suffix!r} -- use .yaml/.yml/.json")
+    unknown = set(data) - _TOP_KEYS
+    if unknown:
+        raise ValueError(f"unknown config key(s): {sorted(unknown)}")
+
+    tiles = data.get("tiles")
+    if not tiles or not isinstance(tiles, list):
+        raise ValueError("tiles: a non-empty list of ARD tile ids, e.g. [h003v004]")
+    for t in tiles:
+        parse_tile(t)
+    dr = data.get("date_range") or {}
+    if set(dr) - {"start", "end"} or "start" not in dr:
+        raise ValueError("date_range: needs start (and optionally end), YYYY-MM-DD")
+    start = date.fromisoformat(str(dr["start"]))
+    end = date.fromisoformat(str(dr["end"])) if dr.get("end") else None
+    if end and end < start:
+        raise ValueError(f"date_range: end {end} is before start {start}")
+    bands = tuple(data.get("bands", CANONICAL_BANDS))
+    bad = [b for b in bands if b not in CANONICAL_BANDS]
+    if bad or not bands:
+        raise ValueError(f"bands: choose from {list(CANONICAL_BANDS)} (got {list(bands)})")
+    save = data.get("save") or {}
+    if set(save) - {"format", "qa_pixel"}:
+        raise ValueError(f"save: unknown key(s) {sorted(set(save) - {'format', 'qa_pixel'})}")
+    fmt = save.get("format", "uint16")
+    if fmt not in SAVE_FORMATS:
+        raise ValueError(f"save.format: one of {list(SAVE_FORMATS)} (got {fmt!r})")
+    workers = int(data.get("workers", 4))
+    if workers < 1:
+        raise ValueError(f"workers must be >= 1, got {workers}")
+    return RunConfig(
+        tiles=tuple(tiles), start=start, end=end, bands=bands, save_format=fmt,
+        save_qa_pixel=bool(save.get("qa_pixel", False)), cloud_mask=bool(data.get("cloud_mask", True)),
+        workers=workers, max_fails_per_obs=int(data.get("max_fails_per_obs", 3)),
+        output_dir=_repo_path(data.get("output_dir", "bench/results/ard_tile_history")),
+        summary_dir=_repo_path(data["summary_dir"]) if data.get("summary_dir") else None,
+    )
+
+
+@dataclass(frozen=True)
+class Tile:
+    """One tile of a run: config + where its state lives."""
+    cfg: RunConfig
+    name: str
+
+    @property
+    def out(self) -> Path:
+        return self.cfg.output_dir / self.name
+
+    @property
+    def hv(self) -> tuple[int, int]:
+        return parse_tile(self.name)
 
 
 # -- helpers ---------------------------------------------------------------
@@ -147,20 +249,20 @@ def _provider():
     return p
 
 
-def _load_grid():
+def _load_grid(t: Tile):
     from rasterio.transform import Affine
     from data_loader.providers.base import Grid
-    g = json.loads((OUT / "grid.json").read_text())
+    g = json.loads((t.out / "grid.json").read_text())
     return Grid(crs=g["crs_wkt"], transform=Affine(*g["transform"]), width=g["width"], height=g["height"])
 
 
-def _scene_refs(ids: list[str]) -> list:
+def _scene_refs(t: Tile, ids: list[str]) -> list:
     """Rebuild SceneRefs (the provider's read path needs the STAC item) for
     the given observation ids, from the cached discovery items."""
     import pystac
     from data_loader.providers.base import SceneRef
     from data_loader.providers.usgs_ard import _build_provenance
-    items = {d["id"]: d for d in json.loads((OUT / "items.json").read_text())}
+    items = {d["id"]: d for d in json.loads((t.out / "items.json").read_text())}
     refs = []
     for i in ids:
         it = pystac.Item.from_dict(items[i])
@@ -169,15 +271,15 @@ def _scene_refs(ids: list[str]) -> list:
     return refs
 
 
-def _file_sizes(provider, obs_id: str) -> int | None:
-    """Sum of the 7 band files' sizes via 1-byte Range GETs on the already
-    minted signed URLs (not timed as part of the observation)."""
+def _file_sizes(provider, obs_id: str, bands) -> int | None:
+    """Sum of the band files' sizes (bands + QA_PIXEL) via 1-byte Range GETs
+    on the already minted signed URLs (not timed as part of the observation)."""
     import requests
     from data_loader.providers.usgs_ard import _tile_product_id, band_file_suffixes
     tpid = _tile_product_id(obs_id)
     sfx = band_file_suffixes(tpid)
     total = 0
-    for suffix in [sfx[b] for b in BANDS] + [sfx["qa"]]:
+    for suffix in [sfx[b] for b in bands] + [sfx["qa"]]:
         url = provider._signed_url_cache.get((tpid, suffix))
         if not url:
             return None
@@ -194,12 +296,13 @@ def _file_sizes(provider, obs_id: str) -> int | None:
 
 
 def _write_uint16(path: Path, arrays: dict, grid) -> None:
-    """Reflectance -> original C2 SR DN (exact inverse of usgs_ard's scale/offset).
-    QA-masked (NaN) and fill (-0.2, i.e. DN 0) both become 0 = nodata."""
+    """Reflectance -> original C2 SR DN (exact inverse of usgs_ard's
+    scale/offset); NaN (fill, QA-masked) -> 0 = nodata. A `qa_pixel` array,
+    if present, is written as-is as the last band (scale 1, offset 0)."""
     import numpy as np
     import rasterio
     from data_loader.providers.usgs_ard import SR_OFFSET, SR_SCALE
-    names = list(arrays)
+    names = [n for n in arrays if n != "qa_pixel"] + (["qa_pixel"] if "qa_pixel" in arrays else [])
     tmp = path.with_suffix(".tif.tmp")
     profile = {"driver": "GTiff", "dtype": "uint16", "count": len(names),
                "height": grid.height, "width": grid.width, "crs": grid.crs,
@@ -208,38 +311,42 @@ def _write_uint16(path: Path, arrays: dict, grid) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with rasterio.open(tmp, "w", **profile) as dst:
         for i, n in enumerate(names, start=1):
-            a = arrays[n]
-            dn = np.rint((a - SR_OFFSET) / SR_SCALE)
-            dn = np.where(np.isnan(dn), 0, np.clip(dn, 0, 65535)).astype("u2")
+            if n == "qa_pixel":
+                dn = arrays[n].astype("u2")
+            else:
+                dn = np.rint((arrays[n] - SR_OFFSET) / SR_SCALE)
+                dn = np.where(np.isnan(dn), 0, np.clip(dn, 0, 65535)).astype("u2")
             dst.write(dn, i)
             dst.set_band_description(i, n)
-        dst.scales = [SR_SCALE] * len(names)
-        dst.offsets = [SR_OFFSET] * len(names)
+        dst.scales = [1.0 if n == "qa_pixel" else SR_SCALE for n in names]
+        dst.offsets = [0.0 if n == "qa_pixel" else SR_OFFSET for n in names]
     tmp.replace(path)
 
 
-def acquire_one(provider, scene, grid, save_dir: Path | None = None, save_dtype: str = "float32") -> dict:
+def acquire_one(provider, scene, grid, cfg: RunConfig, save_dir: Path | None = None,
+                save_dtype: str = "float32") -> dict:
     """One full-tile observation through DataLoader's read path."""
     import numpy as np
     tl = provider._mint_tl
     tl.mint_s = 0.0
     rec = {"id": scene.id, "date": scene.date.isoformat(), "sensor": _sensor(scene.id),
            "cloud": scene.cloud_percent, "pid": os.getpid()}
+    keep_qa = save_dir is not None and cfg.save_qa_pixel
     t0 = time.perf_counter()
     try:
-        arrays = provider.read_scene_bands(scene, "landsat", BANDS, grid, pixel_cloud_mask=True)
+        arrays = provider.read_scene_bands(scene, "landsat", list(cfg.bands), grid,
+                                           pixel_cloud_mask=cfg.cloud_mask, keep_qa=keep_qa)
     except Exception as e:
         rec.update(ok=False, error=f"{type(e).__name__}: {e}"[:500],
                    total_s=time.perf_counter() - t0, mint_s=tl.mint_s)
         return rec
     total = time.perf_counter() - t0
+    first = "nir" if "nir" in cfg.bands else cfg.bands[0]
     rec.update(ok=True, total_s=total, mint_s=tl.mint_s, read_s=total - tl.mint_s,
-               # clear = neither QA-masked nor fill (both NaN). Records written
-               # before fill became NaN (2026-10-03) excluded -0.2 explicitly;
-               # the result is the same.
-               clear_frac=float(np.mean(~np.isnan(arrays["nir"]))),
+               # clear = neither fill nor (with cloud_mask) QA-masked -- both NaN.
+               clear_frac=float(np.mean(~np.isnan(arrays[first]))),
                fill_pct=(scene.handle.properties.get("landsat:fill") if scene.handle is not None else None))
-    rec["bytes"] = _file_sizes(provider, scene.id)
+    rec["bytes"] = _file_sizes(provider, scene.id, cfg.bands)
     if save_dir is not None:
         from data_loader.engine import _write_geotiff
         p = save_dir / f"bands_{scene.date.isoformat()}_{scene.id}.tif"
@@ -247,13 +354,13 @@ def acquire_one(provider, scene, grid, save_dir: Path | None = None, save_dtype:
         if save_dtype == "uint16":
             _write_uint16(p, arrays, grid)
         else:
+            if "qa_pixel" in arrays:
+                arrays["qa_pixel"] = arrays["qa_pixel"].astype("f4")
             _write_geotiff(p, arrays, grid)
         rec.update(write_s=time.perf_counter() - t1, saved_bytes=p.stat().st_size)
     del arrays
     return rec
 
-
-# -- subcommands -----------------------------------------------------------
 
 def tile_bbox_lonlat(h: int, v: int) -> tuple[float, float, float, float]:
     """lon/lat bbox enclosing CONUS ARD tile (h, v), from densified edges."""
@@ -267,58 +374,61 @@ def tile_bbox_lonlat(h: int, v: int) -> tuple[float, float, float, float]:
     return float(min(lons)), float(min(lats)), float(max(lons)), float(max(lats))
 
 
-def cmd_discover(args):
+# -- subcommands (each takes one Tile) --------------------------------------
+
+def cmd_discover(t: Tile, _args):
     """Every observation of the tile. Searches the whole tile extent: an ARD
     item's geometry is its data footprint, so a small AOI misses "sliver"
     observations from neighboring WRS-2 paths that only clip the tile
     (h003v004's first run searched a 0.1 deg center AOI and found 2,411 of
     3,885). The grid query keeps neighboring tiles out."""
-    import pystac
     import rasterio
     from pystac_client import Client
     from data_loader.providers.base import SceneRef
-    from data_loader.providers.usgs_ard import COLLECTION, STAC_URL, _build_provenance
-    OUT.mkdir(parents=True, exist_ok=True)
+    from data_loader.providers.usgs_ard import COLLECTION, STAC_URL, _build_provenance, _tile_product_id
+    t.out.mkdir(parents=True, exist_ok=True)
     p = _provider()
-    end = date.fromisoformat(args.end) if args.end else date.today()
-    bbox = tile_bbox_lonlat(int(TILE_H), int(TILE_V))
+    end = t.cfg.end or date.today()
+    h, v = t.hv
+    bbox = tile_bbox_lonlat(h, v)
     t0 = time.perf_counter()
     items = list(Client.open(STAC_URL).search(
-        collections=[COLLECTION], bbox=bbox, datetime=f"{START.isoformat()}/{end.isoformat()}", limit=500,
-        query={"landsat:grid_horizontal": {"eq": TILE_H}, "landsat:grid_vertical": {"eq": TILE_V},
+        collections=[COLLECTION], bbox=bbox, datetime=f"{t.cfg.start.isoformat()}/{end.isoformat()}", limit=500,
+        query={"landsat:grid_horizontal": {"eq": f"{h:02d}"}, "landsat:grid_vertical": {"eq": f"{v:02d}"},
                "landsat:grid_region": {"eq": "CU"}}).items())
     disc_s = time.perf_counter() - t0
+    if not items:
+        print(f"{t.name}: no observations {t.cfg.start}..{end}")
+        return
     refs = [SceneRef(id=it.id, date=it.datetime.date(), cloud_percent=it.properties.get("eo:cloud_cover"),
                      handle=it, provenance=_build_provenance(it)) for it in items]
     refs.sort(key=lambda r: (r.date, r.id))
-    (OUT / "items.json").write_text(json.dumps([r.handle.to_dict() for r in refs]))
+    (t.out / "items.json").write_text(json.dumps([r.handle.to_dict() for r in refs]))
     obs = [{"id": r.id, "date": r.date.isoformat(), "sensor": _sensor(r.id), "cloud": r.cloud_percent,
             "scene_count": r.handle.properties.get("landsat:scene_count"),
             "fill": r.handle.properties.get("landsat:fill")} for r in refs]
-    (OUT / "observations.json").write_text(json.dumps(
-        {"tile": TILE, "start": START.isoformat(), "end": end.isoformat(), "discovery_s": disc_s,
-         "search": f"whole tile extent {[round(b, 3) for b in bbox]}, grid h{TILE_H}/v{TILE_V}",
+    (t.out / "observations.json").write_text(json.dumps(
+        {"tile": t.name, "start": t.cfg.start.isoformat(), "end": end.isoformat(), "discovery_s": disc_s,
+         "search": f"whole tile extent {[round(b, 3) for b in bbox]}, grid h{h:02d}/v{v:02d}",
          "observations": obs}, indent=1))
 
-    # Native tile grid, from one observation's QA file (every tile shares it).
-    from data_loader.providers.usgs_ard import _tile_product_id
+    # Native tile grid, from one observation's QA file.
     tpid = _tile_product_id(refs[-1].id)
     url = p._band_url(tpid, "QA_PIXEL", ["QA_PIXEL"])
     with rasterio.open("/vsicurl/" + url) as src:
-        (OUT / "grid.json").write_text(json.dumps({
+        (t.out / "grid.json").write_text(json.dumps({
             "crs_wkt": src.crs.to_wkt(), "transform": list(src.transform)[:6],
             "width": src.width, "height": src.height}))
-        print(f"grid {src.width}x{src.height}, res {src.res}")
+        print(f"{t.name}: grid {src.width}x{src.height}, res {src.res}")
     by = {}
     for o in obs:
         by[o["sensor"]] = by.get(o["sensor"], 0) + 1
-    print(f"{len(obs)} observations {obs[0]['date']}..{obs[-1]['date']} in {disc_s:.1f}s; by sensor {by}")
+    print(f"{t.name}: {len(obs)} observations {obs[0]['date']}..{obs[-1]['date']} in {disc_s:.1f}s; by sensor {by}")
 
 
-def cmd_pilot(_args):
-    import numpy as np
-    obs = json.loads((OUT / "observations.json").read_text())["observations"]
-    done = {r["id"] for r in _read_jsonl(OUT / "pilot.jsonl")}
+def cmd_pilot(t: Tile, _args):
+    obs = json.loads((t.out / "observations.json").read_text())["observations"]
+    done = {r["id"] for r in _read_jsonl(t.out / "pilot.jsonl")}
 
     def nearest(prefix, d, exclude):
         c = [o for o in obs if o["sensor"] == prefix and o["id"] not in exclude]
@@ -332,21 +442,22 @@ def cmd_pilot(_args):
     batch_ids = []
     for d in PILOT_BATCH_DATES:
         c = [o for o in obs if o["id"] not in used]
+        if not c:
+            break
         i = min(c, key=lambda o: abs(date.fromisoformat(o["date"]) - d))["id"]
         batch_ids.append(i); used.add(i)
 
-    # Confirm M2M offers the expected band files for each era's naming.
     p = _provider()
-    grid = _load_grid()
+    grid = _load_grid(t)
     sys.stdout = counter = _CountingStdout(sys.stdout)
-    save_dir = OUT / "pilot_output"
+    save_dir = t.out / "pilot_output"
     net0 = _net_bytes()
-    with (OUT / "pilot.jsonl").open("a") as f:
+    with (t.out / "pilot.jsonl").open("a") as f:
         for i in serial_ids:
             if i in done:
                 continue
-            ref = _scene_refs([i])[0]
-            rec = acquire_one(p, ref, grid, save_dir=save_dir)
+            ref = _scene_refs(t, [i])[0]
+            rec = acquire_one(p, ref, grid, t.cfg, save_dir=save_dir)
             rec["phase"] = "serial"
             f.write(json.dumps(rec) + "\n"); f.flush()
             print(f"  serial {i[:25]} {rec['date']} ok={rec['ok']} total={rec['total_s']:.1f}s "
@@ -355,9 +466,9 @@ def cmd_pilot(_args):
         pending = [i for i in batch_ids if i not in done]
         if pending:
             t0 = time.perf_counter()
-            refs = _scene_refs(pending)
+            refs = _scene_refs(t, pending)
             with ThreadPoolExecutor(PILOT_BATCH_WORKERS) as ex:
-                futs = [ex.submit(acquire_one, p, r, grid) for r in refs]
+                futs = [ex.submit(acquire_one, p, r, grid, t.cfg) for r in refs]
                 recs = [fu.result() for fu in futs]
             wall = time.perf_counter() - t0
             for rec in recs:
@@ -367,17 +478,17 @@ def cmd_pilot(_args):
                   f"ok {sum(r['ok'] for r in recs)}", flush=True)
     net1 = _net_bytes()
     sys.stdout = counter.real
-    (OUT / "pilot_meta.json").write_text(json.dumps({
+    (t.out / "pilot_meta.json").write_text(json.dumps({
         "peak_rss_mb": _peak_rss_mb(), "retries": counter.retries,
         "net_mb_indicative": (net1 - net0) / 1e6 if net0 and net1 else None}))
-    estimate()
+    estimate(t)
 
 
-def estimate():
+def estimate(t: Tile, _args=None):
     """Full-run projection from pilot.jsonl -- targeted output only."""
-    obs = json.loads((OUT / "observations.json").read_text())["observations"]
-    recs = _read_jsonl(OUT / "pilot.jsonl")
-    meta = json.loads((OUT / "pilot_meta.json").read_text()) if (OUT / "pilot_meta.json").exists() else {}
+    obs = json.loads((t.out / "observations.json").read_text())["observations"]
+    recs = _read_jsonl(t.out / "pilot.jsonl")
+    meta = json.loads((t.out / "pilot_meta.json").read_text()) if (t.out / "pilot_meta.json").exists() else {}
     ok = [r for r in recs if r["ok"]]
     serial = [r for r in ok if r["phase"] == "serial"]
     batch = [r for r in ok if r["phase"] == "batch"]
@@ -385,7 +496,8 @@ def estimate():
     for o in obs:
         counts[o["sensor"]] = counts.get(o["sensor"], 0) + 1
 
-    print(f"\nPilot: {len(ok)}/{len(recs)} ok, retries={meta.get('retries')}, peak RSS {meta.get('peak_rss_mb', 0):.0f} MB")
+    print(f"\n{t.name} pilot: {len(ok)}/{len(recs)} ok, retries={meta.get('retries')}, "
+          f"peak RSS {meta.get('peak_rss_mb', 0):.0f} MB")
     print(f"{'id':<42}{'phase':<8}{'total s':>8}{'mint s':>8}{'read s':>8}{'MB':>7}{'saved MB':>9}{'clear':>7}")
     for r in recs:
         print(f"{r['id']:<42}{r['phase']:<8}{r['total_s']:>8.1f}{r['mint_s']:>8.1f}"
@@ -415,47 +527,49 @@ def estimate():
     if mb:
         print(f"Transfer: {st.mean(mb):.0f} MB/obs -> ~{st.mean(mb) * n / 1e3:.0f} GB total")
     if saved:
-        print(f"Persistent storage (DataLoader float32 deflate GeoTIFF, 6 bands): {st.mean(saved):.0f} MB/obs "
+        print(f"Persistent storage (DataLoader float32 deflate GeoTIFF): {st.mean(saved):.0f} MB/obs "
               f"(range {min(saved):.0f}-{max(saved):.0f}) -> ~{st.mean(saved) * n / 1e3:.0f} GB")
     if mb:
-        print(f"Persistent storage as delivered (uint16 COGs, 7 files): ~{st.mean(mb) * n / 1e3:.0f} GB")
+        print(f"Persistent storage as delivered (uint16 COGs): ~{st.mean(mb) * n / 1e3:.0f} GB")
 
 
-def cmd_run(args):
+def cmd_run(t: Tile, args):
     """Orchestrator: re-launches the worker until nothing is pending."""
-    for attempt in range(1, args.max_attempts + 1):
-        pending = _pending_ids()
+    for attempt in range(1, 51):
+        pending = _pending_ids(t)
         if not pending:
-            print("nothing pending -- run complete"); break
-        print(f"[attempt {attempt}] {len(pending)} observations pending", flush=True)
-        rc = subprocess.run([sys.executable, __file__, "_worker", "--workers", str(args.workers),
-                             "--save", args.save] + (["--label", args.label] if args.label else [])).returncode
+            print(f"{t.name}: nothing pending -- run complete"); break
+        print(f"[{t.name} attempt {attempt}] {len(pending)} observations pending", flush=True)
+        rc = subprocess.run([sys.executable, __file__, "_worker", "--config", str(args.config), "--tile", t.name]
+                            + (["--label", args.label] if args.label else [])).returncode
         if rc != 0:
-            print(f"[attempt {attempt}] worker exited {rc} (killed?) -- resuming", flush=True)
+            print(f"[{t.name} attempt {attempt}] worker exited {rc} (killed?) -- resuming", flush=True)
             time.sleep(10)
-    cmd_report(args)
+    cmd_report(t, args)
 
 
-def _pending_ids() -> list[str]:
-    obs = json.loads((OUT / "observations.json").read_text())["observations"]
-    recs = _read_jsonl(OUT / "records.jsonl")
+def _pending_ids(t: Tile) -> list[str]:
+    obs = json.loads((t.out / "observations.json").read_text())["observations"]
+    recs = _read_jsonl(t.out / "records.jsonl")
     ok = {r["id"] for r in recs if r["ok"]}
     fails = {}
     for r in recs:
         if not r["ok"]:
             fails[r["id"]] = fails.get(r["id"], 0) + 1
-    return [o["id"] for o in obs if o["id"] not in ok and fails.get(o["id"], 0) < MAX_FAILS_PER_OBS]
+    return [o["id"] for o in obs if o["id"] not in ok and fails.get(o["id"], 0) < t.cfg.max_fails_per_obs]
 
 
-def cmd_worker(args):
-    pending = _pending_ids()
+def cmd_worker(t: Tile, args):
+    cfg = t.cfg
+    pending = _pending_ids(t)
     p = _provider()
-    grid = _load_grid()
+    grid = _load_grid(t)
     sys.stdout = counter = _CountingStdout(sys.stdout)
     lock = threading.Lock()
-    attempt = {"started": time.time(), "workers": args.workers, "pending_at_start": len(pending),
-               "save": args.save, "label": args.label}
-    save_dir = None if args.save == "none" else OUT / "imagery"
+    attempt = {"started": time.time(), "workers": cfg.workers, "pending_at_start": len(pending),
+               "save": cfg.save_format, "save_qa_pixel": cfg.save_qa_pixel, "cloud_mask": cfg.cloud_mask,
+               "label": args.label}
+    save_dir = None if cfg.save_format == "none" else t.out / "imagery"
     net0 = _net_bytes()
     t0 = time.perf_counter()
     cpu0 = resource.getrusage(resource.RUSAGE_SELF)
@@ -469,13 +583,13 @@ def cmd_worker(args):
                        peak_rss_mb=_peak_rss_mb(), final=final,
                        net_mb_indicative=(net1 - net0) / 1e6 if net0 and net1 else None)
         # attempts.jsonl holds one line per attempt; rewrite this attempt's line.
-        path = OUT / "attempts.jsonl"
+        path = t.out / "attempts.jsonl"
         rows = [r for r in _read_jsonl(path) if r["started"] != attempt["started"]]
         path.write_text("".join(json.dumps(r) + "\n" for r in rows + [attempt]))
 
-    with (OUT / "records.jsonl").open("a") as f, ThreadPoolExecutor(args.workers) as ex:
-        futs = {ex.submit(acquire_one, p, ref, grid, save_dir, args.save): ref.id
-                for ref in _scene_refs(pending)}
+    with (t.out / "records.jsonl").open("a") as f, ThreadPoolExecutor(cfg.workers) as ex:
+        futs = {ex.submit(acquire_one, p, ref, grid, cfg, save_dir, cfg.save_format): ref.id
+                for ref in _scene_refs(t, pending)}
         for fu in as_completed(futs):
             rec = fu.result()
             rec["t_end"] = time.time()
@@ -484,16 +598,17 @@ def cmd_worker(args):
                 done += 1
                 if done % 10 == 0:
                     flush_attempt()
-                    print(f"  {done}/{len(pending)} done this attempt, "
+                    print(f"  {t.name}: {done}/{len(pending)} done this attempt, "
                           f"{(time.perf_counter() - t0) / done:.1f}s/obs effective", flush=True)
     flush_attempt(final=True)
     sys.stdout = counter.real
 
 
-def cmd_report(_args):
-    obs = json.loads((OUT / "observations.json").read_text())
-    recs = _read_jsonl(OUT / "records.jsonl")
-    atts = _read_jsonl(OUT / "attempts.jsonl")
+def summarize(t: Tile) -> dict:
+    """records.jsonl/attempts.jsonl -> compact summary, overall and per attempt."""
+    obs = json.loads((t.out / "observations.json").read_text())
+    recs = _read_jsonl(t.out / "records.jsonl")
+    atts = _read_jsonl(t.out / "attempts.jsonl")
     ok = {}
     for r in recs:
         if r["ok"]:
@@ -503,7 +618,7 @@ def cmd_report(_args):
     n = len(obs["observations"])
     wall = sum(a["wall_s"] for a in atts)
     summ = {
-        "tile": TILE, "period": [obs["start"], obs["end"]], "observations": n,
+        "tile": t.name, "period": [obs["start"], obs["end"]], "observations": n,
         "by_sensor": {}, "acquired": len(okl), "permanently_failed": len(failed_ids),
         "failed_attempts": sum(1 for r in recs if not r["ok"]),
         "retries_logged": sum(a.get("retries", 0) for a in atts), "attempts": len(atts),
@@ -562,27 +677,32 @@ def cmd_report(_args):
             "mean_mb": round(st.mean((r.get("bytes") or 0) for r in ok_a) / 1e6) if ok_a else None,
             "mean_saved_mb": round(st.mean((r.get("saved_bytes") or 0) for r in ok_a) / 1e6, 1) if ok_a else None,
         })
-    out = REPO / "docs" / "benchmarks" / "data" / f"ard_tile_history_{TILE}.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(summ, indent=2) + "\n")
+    return summ
+
+
+def cmd_report(t: Tile, _args):
+    summ = summarize(t)
+    if t.cfg.summary_dir is not None:
+        out = t.cfg.summary_dir / f"ard_tile_history_{t.name}.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(summ, indent=2) + "\n")
     print(json.dumps(summ, indent=1))
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    d = sub.add_parser("discover"); d.add_argument("--end", help="YYYY-MM-DD, default today")
-    sub.add_parser("pilot")
-    sub.add_parser("estimate")
-    r = sub.add_parser("run"); r.add_argument("--workers", type=int, default=4); r.add_argument("--max-attempts", type=int, default=50)
-    w = sub.add_parser("_worker"); w.add_argument("--workers", type=int, default=4)
-    for sp in (r, w):
-        sp.add_argument("--save", choices=["uint16", "float32", "none"], default="uint16")
-        sp.add_argument("--label", help="tag for this run's attempts in attempts.jsonl")
-    sub.add_parser("report")
-    a = ap.parse_args()
-    {"discover": cmd_discover, "pilot": cmd_pilot, "estimate": lambda _a: estimate(), "run": cmd_run,
-     "_worker": cmd_worker, "report": cmd_report}[a.cmd](a)
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("cmd", choices=["discover", "pilot", "estimate", "run", "report", "_worker"])
+    ap.add_argument("--config", required=True, type=Path, help="YAML/JSON run config")
+    ap.add_argument("--tile", help="process only this tile from the config")
+    ap.add_argument("--label", help="run: tag for this run's attempts in attempts.jsonl")
+    args = ap.parse_args()
+    cfg = load_config(args.config)
+    if args.tile and args.tile not in cfg.tiles:
+        ap.error(f"--tile {args.tile} is not in the config's tiles {list(cfg.tiles)}")
+    fn = {"discover": cmd_discover, "pilot": cmd_pilot, "estimate": estimate, "run": cmd_run,
+          "report": cmd_report, "_worker": cmd_worker}[args.cmd]
+    for name in ([args.tile] if args.tile else cfg.tiles):
+        fn(Tile(cfg, name), args)
 
 
 if __name__ == "__main__":

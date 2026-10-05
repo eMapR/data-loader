@@ -1,0 +1,27 @@
+# Complete Landsat 4/5/7/8/9 ARD history of one tile, direct from USGS.
+# This is the config the 2026-10-02..04 h003v004 benchmark ran with; its
+# state and imagery are under bench/results/ard_tile_history/h003v004/.
+# Run (credentials: USGS_M2M_USERNAME / USGS_M2M_TOKEN, see .env.example):
+#   python bench/ard_tile_history_bench.py discover --config bench/configs/ard_tile_history_h003v004.yaml
+#   python bench/ard_tile_history_bench.py run      --config bench/configs/ard_tile_history_h003v004.yaml
+#   python bench/ard_tile_history_bench.py report   --config bench/configs/ard_tile_history_h003v004.yaml
+
+tiles: [h003v004]            # CONUS ARD grid ids (hHHHvVVV)
+
+date_range:
+  start: "1990-01-01"
+  end: "2026-10-02"          # omit for "today" at discover time
+
+bands: [blue, green, red, nir, swir1, swir2]   # default: all six SR bands
+
+cloud_mask: true             # QA cloud/dilated cloud/cirrus/shadow -> nodata (fill is always nodata)
+
+save:
+  format: uint16             # uint16 (original DN, 0 = nodata) | float32 (reflectance, NaN) | none
+  qa_pixel: false            # true: also save raw QA_PIXEL as a last band
+
+workers: 4                   # observations in flight at once (M2M minting stays one at a time)
+max_fails_per_obs: 3         # give up on an observation after this many failed attempts
+
+output_dir: bench/results/ard_tile_history     # per-tile state + imagery/ under <output_dir>/<tile>/
+summary_dir: docs/benchmarks/data              # report writes ard_tile_history_<tile>.json here; omit to skip

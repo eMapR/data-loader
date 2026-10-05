@@ -79,12 +79,20 @@ with per-tile observation counts and fill from the LandsatLook STAC.
 Remaining levers: multi-threaded GeoTIFF writes (GDAL `NUM_THREADS`) and more
 workers, bounded by M2M's one-request-at-a-time limit per account.
 
-## Next (queued 2026-10-04): make the tile-history bench config-driven
-YAML config (tiles, dates, bands, workers, save format, output dir, and an
-option to also save QA_PIXEL) via `--config`, replacing the TILE/START/BANDS
-constants, for a multi-tile Oregon run. h003v004 results must reproduce
-through the config path. Confirm with the user before any multi-tile run,
-and check free disk first.
+## Running the tile-history bench (config-driven since 2026-10-05)
+`bench/ard_tile_history_bench.py <discover|pilot|estimate|run|report> --config CFG [--tile hHHHvVVV] [--label TEXT]`.
+The YAML config names tiles, date_range, bands, cloud_mask, save
+(`format: uint16|float32|none`, `qa_pixel: true|false`), workers,
+max_fails_per_obs, output_dir and summary_dir; unknown keys are errors.
+- `bench/configs/ard_tile_history_h003v004.yaml` -- the benchmark's config;
+  `report` with it reproduces the committed summary byte-for-byte.
+- `bench/configs/ard_tile_history_oregon.yaml` -- template for all 23 Oregon
+  tiles (ordered by Oregon share), `qa_pixel: true`. NOT RUN: confirm the
+  tile list and end date with the user, and check free disk on the output
+  volume first (~4.1 TB+ as uint16; /vol/v1 had 15 TB free on 2026-10-05).
+- `save.qa_pixel` appends raw QA_PIXEL as the last band (scale 1, offset 0)
+  via `usgs_ard.read_scene_bands(..., keep_qa=True)`; with `cloud_mask:
+  false` + `qa_pixel: true` only fill is masked and nothing is lost.
 
 Server notes: credentials live in `~/.config/data-loader/usgs.env`
 (`set -a; source ...; set +a` before each command); run long jobs in tmux.
