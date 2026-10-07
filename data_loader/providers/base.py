@@ -7,6 +7,17 @@ bands for one scene onto a shared pixel grid — so engine.py can drive both
 source. A provider may also implement `read_annual_composite` as a fast
 path (e.g. GEE's server-side median reduce); engine.py falls back to
 search+read+locally-reduce when a provider doesn't offer one.
+
+Optional capabilities, detected by attribute:
+- `read_scene_native` + `native_encoding`: the provider can return its
+  source integers (DN) and QA band unchanged, which `output.encoding:
+  native` and `output.qa_band` need. When present, the engine reads through
+  it for every encoding and does scaling/masking itself, so the manifest's
+  description of what was done is exact.
+- `tile_grid` + `search_tile`: named tiles (`aoi.tiles`) on the provider's
+  native grid -- see data_loader.tiles.
+- `credential_problems()`: what's missing to READ (env vars etc.), checked
+  before a run starts instead of failing on the first scene.
 """
 from __future__ import annotations
 
@@ -29,6 +40,32 @@ class Grid:
     transform: Affine
     width: int
     height: int
+
+
+@dataclass(frozen=True)
+class NativeEncoding:
+    """How a provider stores a sensor's surface reflectance and QA band at
+    the source. `scale`/`offset` are the usual values; a NativeRead carries
+    the values for one actual scene (Sentinel-2's offset varies by item)."""
+
+    data_type: str  # e.g. "uint16"
+    nodata: int  # SR fill value
+    scale: float
+    offset: float
+    qa_name: str  # band name used for the stored QA band, e.g. "qa_pixel"
+    qa_data_type: str  # e.g. "uint16"
+    qa_kind: str  # key into data_loader.masking.MASKS / QA_DESCRIPTIONS
+
+
+@dataclass
+class NativeRead:
+    """One scene's source integers on the target grid."""
+
+    bands: dict  # canonical band name -> integer array (source DN)
+    scale: dict  # band -> scale for THIS scene
+    offset: dict  # band -> offset for THIS scene
+    nodata: int
+    qa: Optional[Any] = None  # raw QA array, if requested
 
 
 @dataclass(frozen=True)

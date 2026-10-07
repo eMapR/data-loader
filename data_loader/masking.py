@@ -64,6 +64,52 @@ def sentinel2_scl_mask(scl: np.ndarray, bad_values=SENTINEL2_SCL_BAD_VALUES) -> 
     return bad
 
 
+# What the QA bands mean and which values the masks above treat as bad --
+# written into every manifest so downstream code never has to look up a
+# provider's QA conventions. Landsat: USGS Collection 2 Level-2 QA_PIXEL;
+# Sentinel-2: ESA L2A Scene Classification.
+LANDSAT_QA_PIXEL_BITS = {
+    0: "fill", 1: "dilated_cloud", 2: "cirrus", 3: "cloud", 4: "cloud_shadow", 5: "snow",
+    6: "clear", 7: "water", "8-9": "cloud_confidence", "10-11": "cloud_shadow_confidence",
+    "12-13": "snow_ice_confidence", "14-15": "cirrus_confidence",
+}
+SENTINEL2_SCL_CLASSES = {
+    0: "no_data", 1: "saturated_or_defective", 2: "dark_area_pixels", 3: "cloud_shadows",
+    4: "vegetation", 5: "not_vegetated", 6: "water", 7: "unclassified", 8: "cloud_medium_probability",
+    9: "cloud_high_probability", 10: "thin_cirrus", 11: "snow",
+}
+GLAD_ARD_QA_CLASSES = {
+    0: "no_data", 1: "land", 2: "water", 3: "cloud", 4: "cloud_shadow", 5: "topographic_shadow",
+    6: "snow_ice", 7: "haze", 15: "land",
+}
+
+QA_DESCRIPTIONS = {
+    "landsat_qa_pixel": {"name": "qa_pixel", "encoding": "bitmask",
+                         "reference": "USGS Landsat Collection 2 Level-2 QA_PIXEL",
+                         "bits": {str(k): v for k, v in LANDSAT_QA_PIXEL_BITS.items()}},
+    "sentinel2_scl": {"name": "scl", "encoding": "classes",
+                      "reference": "ESA Sentinel-2 L2A Scene Classification (SCL)",
+                      "classes": {str(k): v for k, v in SENTINEL2_SCL_CLASSES.items()}},
+    "glad_ard_qa": {"name": "qa", "encoding": "classes",
+                    "reference": "GLAD ARD QA (Potapov et al. 2020)",
+                    "classes": {str(k): v for k, v in GLAD_ARD_QA_CLASSES.items()}},
+}
+
+
+def describe_mask(qa_kind: str) -> dict:
+    """Exactly which QA values pixel_cloud_mask turns into nodata."""
+    if qa_kind == "landsat_qa_pixel":
+        return {"qaBand": "qa_pixel", "rule": "masked if any listed bit is set",
+                "bits": {str(b): LANDSAT_QA_PIXEL_BITS[b] for b in LANDSAT_QA_BAD_BITS}}
+    if qa_kind == "sentinel2_scl":
+        return {"qaBand": "scl", "rule": "masked if the class is listed",
+                "classes": {str(v): SENTINEL2_SCL_CLASSES[v] for v in SENTINEL2_SCL_BAD_VALUES}}
+    if qa_kind == "glad_ard_qa":
+        return {"qaBand": "qa", "rule": "kept only if the class is listed",
+                "keptClasses": {str(v): GLAD_ARD_QA_CLASSES[v] for v in GLAD_ARD_QA_GOOD_VALUES}}
+    raise ValueError(f"unknown qa kind {qa_kind!r}")
+
+
 MASKS = {
     "landsat_qa_pixel": landsat_qa_mask,
     "sentinel2_scl": sentinel2_scl_mask,

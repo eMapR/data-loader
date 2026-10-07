@@ -90,7 +90,7 @@ from typing import Optional
 
 import numpy as np
 
-from data_loader.masking import dn_to_reflectance, landsat_qa_mask
+from data_loader.masking import SR_FILL_DN, dn_to_reflectance, landsat_qa_mask
 from data_loader.product_contract import (
     SCENE,
     USGS_ARD_SR,
@@ -98,7 +98,8 @@ from data_loader.product_contract import (
     ProductIdentity,
     parse_version_policy,
 )
-from data_loader.providers.base import Grid, SceneRef
+from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef
+from data_loader.tiles import UsgsArdConusGrid, item_tile_id
 
 STAC_URL = "https://landsatlook.usgs.gov/stac-server"
 COLLECTION = "landsat-c2ard-sr"
@@ -217,7 +218,6 @@ def _build_provenance(item) -> AcquisitionProvenance:
                 "fill_percent": props.get("landsat:fill"),
                 "start_datetime": props.get("start_datetime"),
                 "end_datetime": props.get("end_datetime"),
-                "proj_wkt2": props.get("proj:wkt2"),
                 "proj_shape": props.get("proj:shape"),
                 "proj_transform": props.get("proj:transform"),
             }.items() if v is not None
@@ -225,8 +225,42 @@ def _build_provenance(item) -> AcquisitionProvenance:
     )
 
 
+class CompactItem:
+    """A discovered ARD STAC item, kept small. A full item is ~85 KB as a
+    dict (~40 asset entries) and ~140 KB as a pystac.Item; an Oregon-scale
+    archive holds ~89k of them for the whole run. Reads need only the id,
+    datetime and properties; the verbatim record (for the metadata
+    snapshot) is kept zlib-compressed and expanded by to_dict()."""
+
+    __slots__ = ("id", "datetime", "properties", "_packed")
+
+    def __init__(self, item):
+        import json
+        import zlib
+
+        self.id = item.id
+        self.datetime = item.datetime
+        self.properties = dict(item.properties)
+        self._packed = zlib.compress(json.dumps(item.to_dict()).encode(), 6)
+
+    def to_dict(self) -> dict:
+        import json
+        import zlib
+
+        return json.loads(zlib.decompress(self._packed))
+
+
+def _cloud_query(max_cloud_percent) -> Optional[dict]:
+    """STAC query for the scene cloud filter -- none at 100, so items with
+    100% (or missing) eo:cloud_cover are not silently dropped."""
+    if max_cloud_percent is None or max_cloud_percent >= 100:
+        return None
+    return {"eo:cloud_cover": {"lte": max_cloud_percent}}
+
+
 class UsgsArdProvider:
     name = "usgs_ard"
+    tile_grid = UsgsArdConusGrid()
 
     def __init__(self, username: Optional[str] = None, token: Optional[str] = None, retries: int = 4):
         import os
@@ -341,7 +375,7 @@ class UsgsArdProvider:
                         collections=[COLLECTION],
                         bbox=bbox,
                         datetime=f"{start.isoformat()}/{end.isoformat()}",
-                        query={"eo:cloud_cover": {"lt": max_cloud_percent}},
+                        query=_cloud_query(max_cloud_percent),
                     ).items()
                 )
                 break
@@ -358,8 +392,47 @@ class UsgsArdProvider:
                 continue
             refs.append(SceneRef(
                 id=it.id, date=d, cloud_percent=it.properties.get("eo:cloud_cover"),
-                handle=it, provenance=_build_provenance(it),
+                handle=CompactItem(it), provenance=_build_provenance(it),
             ))
+        return refs
+
+    def search_tile(self, tile_id: str, sensor: str, start, end, max_cloud_percent=None) -> list[SceneRef]:
+        """Every ARD item of one CONUS tile in [start, end]. Searches the
+        WHOLE tile extent and keeps only items on this tile's grid h/v: an
+        ARD item's STAC geometry is its data footprint, so a small AOI
+        misses "sliver" observations from neighboring WRS-2 paths that only
+        clip the tile edge (h003v004: a 0.1 deg center AOI found 2,411 of
+        3,885 observations)."""
+        if sensor != "landsat":
+            raise ValueError(f"usgs_ard only supports sensor='landsat' (got {sensor!r})")
+        h, v = self.tile_grid.parse(tile_id)
+        query = {"landsat:grid_horizontal": {"eq": f"{h:02d}"}, "landsat:grid_vertical": {"eq": f"{v:02d}"},
+                 "landsat:grid_region": {"eq": "CU"}}
+        query.update(_cloud_query(max_cloud_percent) or {})
+        cat = self._open_client()
+        items = None
+        for attempt in range(self.retries):
+            try:
+                items = list(cat.search(
+                    collections=[COLLECTION], bbox=self.tile_grid.bbox_lonlat(tile_id),
+                    datetime=f"{start.isoformat()}/{end.isoformat()}", query=query, limit=500,
+                ).items())
+                break
+            except Exception as e:  # LandsatLook's STAC endpoint returns occasional 500s
+                print(f"[{self.name}] STAC search retry {attempt + 1}/{self.retries}: {e}")
+                time.sleep(5 * (attempt + 1))
+        if items is None:
+            raise RuntimeError(f"[{self.name}] STAC search for tile {tile_id} failed after {self.retries} attempts")
+        refs = []
+        for it in items:
+            if item_tile_id(it) != tile_id:
+                continue
+            d = it.datetime.astimezone(timezone.utc).date() if it.datetime else None
+            if d is None:
+                continue
+            refs.append(SceneRef(id=it.id, date=d, cloud_percent=it.properties.get("eo:cloud_cover"),
+                                 handle=CompactItem(it), provenance=_build_provenance(it)))
+        refs.sort(key=lambda r: (r.date, r.id))
         return refs
 
     # -- read (M2M signed URLs, direct from USGS) --------------------------
@@ -550,12 +623,21 @@ class UsgsArdProvider:
                 self._signed_url_cache[(tile_product_id, s)] = u
             return self._signed_url_cache[key]
 
-    def read_scene_bands(self, scene: SceneRef, sensor: str, bands, grid: Grid, pixel_cloud_mask: bool,
-                         keep_qa: bool = False):
-        """Reflectance for `bands` (fill and, with pixel_cloud_mask, QA-flagged
-        pixels as NaN). keep_qa=True also returns the raw QA_PIXEL bitmask as
-        out["qa_pixel"] (uint16, unscaled) -- for callers that store it, e.g.
-        bench/ard_tile_history_bench.py; the engine doesn't use it."""
+    def native_encoding(self, sensor: str) -> NativeEncoding:
+        return NativeEncoding(data_type="uint16", nodata=SR_FILL_DN, scale=SR_SCALE, offset=SR_OFFSET,
+                              qa_name="qa_pixel", qa_data_type="uint16", qa_kind="landsat_qa_pixel")
+
+    def credential_problems(self, sensors=()) -> list[str]:
+        if self.username and self.token:
+            return []
+        return ["usgs_ard reads need a USGS EROS account with M2M access: set USGS_M2M_USERNAME and "
+                "USGS_M2M_TOKEN (see docs/getting-started.md). Discovery (`data-loader plan`) works without them."]
+
+    def _read_dn(self, scene: SceneRef, bands, grid: Grid, with_qa: bool):
+        """Source DN for `bands` (+ QA_PIXEL if with_qa) on `grid`: whole-file
+        downloads for a full tile on its native grid, windowed /vsicurl reads
+        (bilinear for SR, nearest for QA) otherwise. Returns
+        ({band: dn}, qa_or_None)."""
         import rasterio
         from rasterio.enums import Resampling
         from rasterio.vrt import WarpedVRT
@@ -565,7 +647,7 @@ class UsgsArdProvider:
         tile_product_id = _tile_product_id(scene.id)
         suffix_for = band_file_suffixes(tile_product_id)
         needed = [suffix_for[b] for b in bands]
-        if pixel_cloud_mask or keep_qa:
+        if with_qa:
             needed = needed + [suffix_for["qa"]]
 
         def read_asset(suffix, resampling):
@@ -591,7 +673,7 @@ class UsgsArdProvider:
                     raise
 
         resampling = {suffix_for[b]: Resampling.bilinear for b in bands}
-        if pixel_cloud_mask or keep_qa:
+        if with_qa:
             resampling[suffix_for["qa"]] = Resampling.nearest
         if _is_native_tile_grid(scene, grid):
             dn_by_suffix = self._read_native_tile(tile_product_id, needed, grid, resampling)
@@ -599,11 +681,24 @@ class UsgsArdProvider:
         else:
             read = lambda suffix: read_asset(suffix, resampling[suffix])
 
-        out: dict[str, np.ndarray] = {}
-        for b in bands:
-            out[b] = dn_to_reflectance(read(suffix_for[b]), SR_SCALE, SR_OFFSET)
+        dn = {b: read(suffix_for[b]) for b in bands}
+        qa = read(suffix_for["qa"]) if with_qa else None
+        return dn, qa
 
-        qa = read(suffix_for["qa"]) if (pixel_cloud_mask or keep_qa) else None
+    def read_scene_native(self, scene: SceneRef, sensor: str, bands, grid: Grid, include_qa: bool) -> NativeRead:
+        dn, qa = self._read_dn(scene, bands, grid, include_qa)
+        return NativeRead(bands=dn, scale={b: SR_SCALE for b in bands}, offset={b: SR_OFFSET for b in bands},
+                          nodata=SR_FILL_DN, qa=qa.astype("uint16") if qa is not None else None)
+
+    def read_scene_bands(self, scene: SceneRef, sensor: str, bands, grid: Grid, pixel_cloud_mask: bool,
+                         keep_qa: bool = False):
+        """Reflectance for `bands` (fill and, with pixel_cloud_mask, QA-flagged
+        pixels as NaN). keep_qa=True also returns the raw QA_PIXEL bitmask as
+        out["qa_pixel"] (uint16, unscaled) -- used by
+        bench/ard_tile_history_bench.py; the engine reads through
+        read_scene_native instead."""
+        dn, qa = self._read_dn(scene, bands, grid, pixel_cloud_mask or keep_qa)
+        out: dict[str, np.ndarray] = {b: dn_to_reflectance(dn[b], SR_SCALE, SR_OFFSET) for b in bands}
         if pixel_cloud_mask:
             bad = landsat_qa_mask(qa)
             for arr in out.values():
@@ -611,7 +706,6 @@ class UsgsArdProvider:
         if keep_qa:
             out["qa_pixel"] = qa.astype("uint16")
         return out
-
 
     # -- full-tile reads on the native grid --------------------------------
 

@@ -209,7 +209,9 @@ class UsgsM2mProvider:
                         "start": start.isoformat(), "end": end.isoformat(),
                     },
                     "cloudCoverFilter": {
-                        "min": 0, "max": int(max_cloud_percent), "includeUnknown": False,
+                        "min": 0, "max": int(max_cloud_percent),
+                        # at 100 nothing is filtered, including scenes with no cloud value
+                        "includeUnknown": max_cloud_percent >= 100,
                     },
                 },
                 "maxResults": 2000,

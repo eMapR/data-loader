@@ -46,6 +46,14 @@ SENTINEL2_BANDS = {
 }
 
 
+def _cloud_filter(coll, cloud_property: str, max_cloud_percent):
+    """Scene cloud filter: none at 100 (keeps 100%-cloud and unlabeled
+    images), else cloud <= max."""
+    if max_cloud_percent is None or max_cloud_percent >= 100:
+        return coll
+    return coll.filterMetadata(cloud_property, "not_greater_than", max_cloud_percent)
+
+
 @dataclass(frozen=True)
 class SensorGeeSpec:
     collections: tuple[str, ...]
@@ -341,11 +349,11 @@ class GeeProvider:
         region = ee.Geometry.Rectangle(list(bbox))
         refs: list[SceneRef] = []
         for cid in spec.collections:
-            coll = (
+            coll = _cloud_filter(
                 ee.ImageCollection(cid)
                 .filterBounds(region)
-                .filterDate(start.isoformat(), (end + timedelta(days=1)).isoformat())
-                .filterMetadata(spec.cloud_property, "less_than", max_cloud_percent)
+                .filterDate(start.isoformat(), (end + timedelta(days=1)).isoformat()),
+                spec.cloud_property, max_cloud_percent,
             )
             refs.extend(
                 self._refs_from_collection(
@@ -508,11 +516,9 @@ class GeeProvider:
         merged = None
         contributing_refs: list[SceneRef] = []
         for cid in spec.collections:
-            coll = (
-                ee.ImageCollection(cid)
-                .filterBounds(region)
-                .filterDate(start_d, end_d)
-                .filterMetadata(spec.cloud_property, "less_than", max_cloud_percent)
+            coll = _cloud_filter(
+                ee.ImageCollection(cid).filterBounds(region).filterDate(start_d, end_d),
+                spec.cloud_property, max_cloud_percent,
             )
             # Recover which images are actually eligible for this composite
             # BEFORE reducing -- one batched round of aggregate_array calls

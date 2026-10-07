@@ -19,7 +19,7 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from data_loader.masking import MASKS, dn_to_reflectance
+from data_loader.masking import MASKS, SR_FILL_DN, dn_to_reflectance
 from data_loader.product_contract import (
     ESA_S2_L2A,
     SCENE,
@@ -28,7 +28,7 @@ from data_loader.product_contract import (
     VersionCandidate,
     select_processing_versions,
 )
-from data_loader.providers.base import Grid, SceneRef
+from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef
 
 CANONICAL_BANDS = ("blue", "green", "red", "nir", "swir1", "swir2")
 
@@ -193,11 +193,15 @@ def _s2_version_candidates(items) -> list[VersionCandidate]:
 
 # ESA processing baseline 04.00 (in operation from 2022-01-25) added a
 # BOA_ADD_OFFSET of -1000 DN to Sentinel-2 L2A surface reflectance:
-# reflectance = (DN - 1000) / 10000 = DN * 0.0001 - 0.1. Neither Planetary
-# Computer nor Earth Search removes it from the pixels (checked 2026-10-07:
-# open-ocean B08 on tile 10TDQ is ~DN 19 at baseline 03.00 and ~DN 1234 at
-# 05.09). Earth Search declares the offset in each asset's raster:bands;
-# Planetary Computer declares nothing, so the baseline decides.
+# reflectance = (DN - 1000) / 10000 = DN * 0.0001 - 0.1.
+# - Planetary Computer serves ESA's DN unchanged: open-ocean B08 on tile
+#   10TDQ is ~DN 19 at baseline 03.00 and ~DN 1234 at 05.09 (checked
+#   2026-10-07), so baseline >= 04.00 needs offset -0.1.
+# - Earth Search has already removed the offset from the pixels when an item
+#   says `earthsearch:boa_offset_applied: true` (the same 2023-07-14 scene
+#   reads exactly 1000 DN lower there than on Planetary Computer), so those
+#   items need offset 0 -- even though their raster:bands still declare
+#   -0.1, which is why raster:bands is NOT trusted here.
 S2_BOA_OFFSET_BASELINE = (4, 0)
 S2_BOA_OFFSET_START = date(2022, 1, 25)
 S2_BOA_OFFSET_REFLECTANCE = -0.1
@@ -215,17 +219,17 @@ def item_sr_scale_offset(item, spec: SensorStacSpec, asset_key: Optional[str] = 
     """(scale, offset) that turns this item's SR DN into reflectance.
 
     Landsat C2 L2 is constant (spec values). Sentinel-2 L2A depends on the
-    item's processing baseline (see S2_BOA_OFFSET_BASELINE): the asset's own
-    raster:bands scale/offset when the catalog declares them, else -0.1 for
-    baseline >= 04.00, else 0.0. With no baseline property at all, the
-    acquisition date decides (baseline 04.00 started 2022-01-25)."""
+    item (see S2_BOA_OFFSET_BASELINE): offset 0 if the catalog already
+    removed the offset from the pixels (earthsearch:boa_offset_applied),
+    else -0.1 for processing baseline >= 04.00, else 0. With no baseline
+    property, the acquisition date decides (04.00 started 2022-01-25).
+    `asset_key` is accepted for symmetry; the offset is per item."""
     if spec.product_family != ESA_S2_L2A:
         return spec.sr_scale, spec.sr_offset
-    if asset_key is not None and asset_key in item.assets:
-        rb = (item.assets[asset_key].extra_fields.get("raster:bands") or [{}])[0]
-        if "scale" in rb and "offset" in rb:
-            return float(rb["scale"]), float(rb["offset"])
-    baseline = _baseline_tuple(item.properties.get("s2:processing_baseline"))
+    props = item.properties
+    if props.get("earthsearch:boa_offset_applied") is True:
+        return spec.sr_scale, 0.0
+    baseline = _baseline_tuple(props.get("s2:processing_baseline"))
     if baseline is None:
         d = item.datetime.date() if item.datetime else None
         new = d is not None and d >= S2_BOA_OFFSET_START
@@ -417,7 +421,10 @@ class StacProvider:
             )
         cat = self._open_client()
 
-        query: dict = {"eo:cloud_cover": {"lt": max_cloud_percent}}
+        query: dict = {}
+        if max_cloud_percent is not None and max_cloud_percent < 100:
+            # none at 100, so 100%-cloud (or unlabeled) items are kept
+            query["eo:cloud_cover"] = {"lte": max_cloud_percent}
         if spec.platform_filter:
             query["platform"] = {"in": list(spec.platform_filter)}
 
@@ -429,7 +436,7 @@ class StacProvider:
                         collections=[spec.collection],
                         bbox=bbox,
                         datetime=f"{start.isoformat()}/{end.isoformat()}",
-                        query=query,
+                        query=query or None,
                     ).items()
                 )
                 break
@@ -476,7 +483,46 @@ class StacProvider:
             )
         return refs
 
+    def native_encoding(self, sensor: str) -> NativeEncoding:
+        spec = self.config.sensors[sensor]
+        qa_name = "scl" if spec.qa_kind == "sentinel2_scl" else "qa_pixel"
+        return NativeEncoding(data_type="uint16", nodata=SR_FILL_DN, scale=spec.sr_scale, offset=spec.sr_offset,
+                              qa_name=qa_name, qa_data_type="uint16", qa_kind=spec.qa_kind)
+
+    def credential_problems(self, sensors=()) -> list[str]:
+        out = []
+        for sensor in sensors:
+            spec = self.config.sensors.get(sensor)
+            if spec is not None and spec.requires_aws_credentials and not _has_aws_credentials():
+                out.append(f"{self.name} {sensor} reads from a Requester Pays S3 bucket: configure AWS "
+                           "credentials (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY or ~/.aws/credentials); "
+                           "requests are billed to that account. Planetary Computer serves the same "
+                           "Landsat product free.")
+        return out
+
+    def read_scene_native(self, scene: SceneRef, sensor: str, bands, grid: Grid, include_qa: bool) -> NativeRead:
+        spec = self.config.sensors[sensor]
+        dn, qa = self._read_dn(scene, sensor, bands, grid, include_qa)
+        so = {b: item_sr_scale_offset(scene.handle, spec, spec.band_map[b]) for b in bands}
+        return NativeRead(bands=dn, scale={b: v[0] for b, v in so.items()}, offset={b: v[1] for b, v in so.items()},
+                          nodata=SR_FILL_DN, qa=qa.astype("uint16") if qa is not None else None)
+
     def read_scene_bands(self, scene: SceneRef, sensor: str, bands, grid: Grid, pixel_cloud_mask: bool):
+        spec = self.config.sensors[sensor]
+        dn, qa = self._read_dn(scene, sensor, bands, grid, pixel_cloud_mask)
+        out: dict[str, np.ndarray] = {}
+        for b in bands:
+            scale, offset = item_sr_scale_offset(scene.handle, spec, spec.band_map[b])
+            out[b] = dn_to_reflectance(dn[b], scale, offset)
+        if pixel_cloud_mask:
+            bad = MASKS[spec.qa_kind](qa)
+            for arr in out.values():
+                arr[bad] = np.nan
+        return out
+
+    def _read_dn(self, scene: SceneRef, sensor: str, bands, grid: Grid, with_qa: bool):
+        """Source DN for `bands` (bilinear) and, if with_qa, the QA/SCL band
+        (nearest), each warped onto `grid` straight from the COG."""
         import rasterio
         from rasterio.enums import Resampling
         from rasterio.vrt import WarpedVRT
@@ -536,15 +582,6 @@ class StacProvider:
                         continue
                     raise
 
-        out: dict[str, np.ndarray] = {}
-        for b in bands:
-            dn = read_asset(spec.band_map[b], Resampling.bilinear)
-            scale, offset = item_sr_scale_offset(item, spec, spec.band_map[b])
-            out[b] = dn_to_reflectance(dn, scale, offset)
-
-        if pixel_cloud_mask:
-            qa = read_asset(spec.band_map["qa"], Resampling.nearest)
-            bad = MASKS[spec.qa_kind](qa)
-            for arr in out.values():
-                arr[bad] = np.nan
-        return out
+        dn = {b: read_asset(spec.band_map[b], Resampling.bilinear) for b in bands}
+        qa = read_asset(spec.band_map["qa"], Resampling.nearest) if with_qa else None
+        return dn, qa

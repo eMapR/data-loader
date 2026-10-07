@@ -16,8 +16,10 @@ ES_S2 = aws_earth_search.CONFIG.sensors["sentinel2"]
 PC_LANDSAT = planetary_computer.CONFIG.sensors["landsat"]
 
 
-def _item(dt, baseline=None, raster_bands=None, asset_key="B08"):
+def _item(dt, baseline=None, raster_bands=None, asset_key="B08", boa_offset_applied=None):
     props = {} if baseline is None else {"s2:processing_baseline": baseline}
+    if boa_offset_applied is not None:
+        props["earthsearch:boa_offset_applied"] = boa_offset_applied
     it = pystac.Item("x", None, None, dt, props)
     extra = {} if raster_bands is None else {"raster:bands": raster_bands}
     it.add_asset(asset_key, pystac.Asset("https://example/b.tif", extra_fields=extra))
@@ -36,11 +38,14 @@ class Sentinel2OffsetTests(unittest.TestCase):
         for b in ("04.00", "05.09", "05.10"):
             self.assertEqual(item_sr_scale_offset(_item(NEW, b), PC_S2, "B08"), (0.0001, -0.1), b)
 
-    def test_declared_raster_bands_offset_wins(self):
-        it = _item(NEW, "05.09", [{"scale": 0.0001, "offset": -0.1}], asset_key="nir")
-        self.assertEqual(item_sr_scale_offset(it, ES_S2, "nir"), (0.0001, -0.1))
-        it = _item(NEW, "05.09", [{"scale": 0.0001, "offset": 0.0}], asset_key="nir")
+    def test_earth_search_items_with_offset_already_removed_get_zero(self):
+        """Earth Search pixels are already harmonized when boa_offset_applied
+        is true (the 2023-07-14 10TDQ scene reads 1000 DN lower there than on
+        Planetary Computer), even though raster:bands declares -0.1."""
+        it = _item(NEW, "05.09", [{"scale": 0.0001, "offset": -0.1}], asset_key="nir", boa_offset_applied=True)
         self.assertEqual(item_sr_scale_offset(it, ES_S2, "nir"), (0.0001, 0.0))
+        it = _item(NEW, "05.09", [{"scale": 0.0001, "offset": -0.1}], asset_key="nir", boa_offset_applied=False)
+        self.assertEqual(item_sr_scale_offset(it, ES_S2, "nir"), (0.0001, -0.1))
 
     def test_missing_baseline_falls_back_to_acquisition_date(self):
         self.assertEqual(item_sr_scale_offset(_item(OLD), PC_S2, "B08")[1], 0.0)
@@ -53,12 +58,15 @@ class Sentinel2OffsetTests(unittest.TestCase):
         prov = _build_provenance("planetary_computer", _item(NEW, "05.10"), PC_S2)
         self.assertEqual(prov.extra["sr_offset"], -0.1)
 
-    def test_dark_water_reflectance_matches_across_baselines(self):
-        """The live check behind the fix: open-ocean NIR is ~DN 19 at
-        baseline 03.00 and ~DN 1019+ at 05.x; both must come out near 0."""
+    def test_dark_water_reflectance_matches_across_baselines_and_catalogs(self):
+        """The live checks behind the rule: open-ocean NIR is ~DN 19 at
+        baseline 03.00 and ~DN 1019+ at 05.x on Planetary Computer, and
+        ~DN 19 on Earth Search (offset already removed); all must come out
+        near 0."""
         from data_loader.masking import dn_to_reflectance
-        for dt, baseline, dn in ((OLD, "03.00", 19), (NEW, "05.09", 1019)):
-            scale, offset = item_sr_scale_offset(_item(dt, baseline), PC_S2, "B08")
+        for dt, baseline, dn, applied in ((OLD, "03.00", 19, None), (NEW, "05.09", 1019, None),
+                                          (NEW, "05.09", 19, True)):
+            scale, offset = item_sr_scale_offset(_item(dt, baseline, boa_offset_applied=applied), PC_S2, "B08")
             r = dn_to_reflectance(np.array([dn], "u2"), scale, offset)[0]
             self.assertAlmostEqual(float(r), 0.0019, places=4)
 
