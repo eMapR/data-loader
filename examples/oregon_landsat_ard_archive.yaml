@@ -1,7 +1,7 @@
 # eMapR's Oregon Landsat archive: the complete USGS ARD history of every
 # CONUS ARD tile touching Oregon, as distributed by USGS (uint16 DN +
 # QA_PIXEL, no cloud masking). Open-ended: re-running later adds new
-# imagery. Run it in tmux; ~89k observations, ~4-5 TB, ~2-4 weeks on one
+# imagery. Run it in tmux; ~89k observations, ~5-6 TB, ~3-4 weeks on one
 # M2M account (docs/large-jobs.md). Set the location with --output-dir:
 #   data-loader plan examples/oregon_landsat_ard_archive.yaml --output-dir /big/disk/oregon_landsat_ard
 #   data-loader run  examples/oregon_landsat_ard_archive.yaml --output-dir /big/disk/oregon_landsat_ard

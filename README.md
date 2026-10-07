@@ -138,8 +138,8 @@ output:
 See [`examples/usgs_ard_tile_archive.yaml`](examples/usgs_ard_tile_archive.yaml) and eMapR's Oregon archive
 [`examples/oregon_landsat_ard_archive.yaml`](examples/oregon_landsat_ard_archive.yaml), along with
 [docs/large-jobs.md](docs/large-jobs.md) for runtime, storage, tmux, resume and updates. The
-Oregon archive is about 89,000 observations, takes 2–4 weeks on one USGS
-account, and needs roughly 4–5 TB.
+Oregon archive is about 89,000 observations, takes about 3–4 weeks on one USGS
+account, and needs roughly 5–6 TB.
 
 ## Documentation
 
