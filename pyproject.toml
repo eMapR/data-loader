@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "data-loader"
+dynamic = ["version"]
+description = "Config-driven satellite imagery acquisition (Landsat ARD, Planetary Computer, Earth Search, ...) with a versioned output manifest"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "rasterio>=1.3",
+    "pystac>=1.8",
+    "pystac-client>=0.7",
+    "planetary-computer",
+    "pyproj",
+    "pyyaml",
+    "requests",
+]
+
+[project.optional-dependencies]
+gee = ["earthengine-api"]
+dev = ["pytest"]
+
+[project.scripts]
+data-loader = "data_loader.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["data_loader*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "data_loader._version.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

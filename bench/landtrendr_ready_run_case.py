@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-"""Complete end-to-end pipeline benchmark for ONE provider, run as its own
+"""[Historical: drives the pre-1.0 DataLoader engine/config API. Re-run it from the
+`pre-1.0` git tag; see docs/development/benchmarks/README.md.]
+
+Complete end-to-end pipeline benchmark for ONE provider, run as its own
 subprocess (see landtrendr_ready_bench.py for why: GDAL /vsicurl cache
 isolation, established the hard way earlier in this project).
 

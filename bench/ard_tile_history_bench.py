@@ -348,7 +348,7 @@ def acquire_one(provider, scene, grid, cfg: RunConfig, save_dir: Path | None = N
                fill_pct=(scene.handle.properties.get("landsat:fill") if scene.handle is not None else None))
     rec["bytes"] = _file_sizes(provider, scene.id, cfg.bands)
     if save_dir is not None:
-        from data_loader.engine import _write_geotiff
+        from data_loader.geotiff import write_float32 as _write_geotiff
         p = save_dir / f"bands_{scene.date.isoformat()}_{scene.id}.tif"
         t1 = time.perf_counter()
         if save_dtype == "uint16":

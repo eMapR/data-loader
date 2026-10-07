@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-"""Runs the actual scene-level concurrency implementation
+"""[Historical: drives the pre-1.0 DataLoader engine/config API. Re-run it from the
+`pre-1.0` git tag; see docs/development/benchmarks/README.md.]
+
+Runs the actual scene-level concurrency implementation
 (data_loader.engine._run_scene_mode -- not a synthetic harness) once, at a
 given `workers` count, over a fixed, representative large-Landsat workload.
 

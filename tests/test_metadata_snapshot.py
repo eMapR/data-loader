@@ -18,7 +18,6 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from data_loader.config import AOI, Config, DateRange, Filters, OutputSpec, SensorSpec
 from data_loader.metadata_snapshot import sanitize_filename, snapshot_ref, write_snapshot
 from data_loader.product_contract import (
     GLAD_ARD,
@@ -245,110 +244,44 @@ class GeeSourceMetadataTests(unittest.TestCase):
 # 5. engine.py wiring: source_metadata_ref in provenance, dedup, composites
 # --------------------------------------------------------------------------
 
-class _FakeProviderWithSnapshot:
-    """Like test_product_contract.py's _FakeProvider, plus a
-    call-counted source_metadata so dedup-within-a-run is verifiable."""
-
-    name = "fake"
-
-    def __init__(self, identity: ProductIdentity, num_scenes: int = 2):
-        self._identity = identity
-        self.num_scenes = num_scenes
-        self.last_excluded_versions: list = []
-        self.source_metadata_calls: list = []
-
-    def capabilities(self):
-        return {self._identity.sensor: self._identity}
-
-    def processing_profile(self, sensor):
-        return {}
-
-    def search_scenes(self, bbox, sensor, start, end, season_start, season_end, max_cloud_percent, processing_version_policy="any"):
-        import numpy as np  # noqa: F401
-
-        refs = []
-        for i in range(self.num_scenes):
-            refs.append(SceneRef(
-                id=f"fake-scene-{i}", date=start, cloud_percent=1.0,
-                handle={"i": i},
-                provenance=AcquisitionProvenance(
-                    provider=self.name, provider_item_id=f"fake-scene-{i}",
-                    upstream_product_id=f"UPSTREAM_{i}",
-                    acquisition_datetime=f"{start.isoformat()}T00:00:00+00:00",
-                    platform="fake-sat", product_family=self._identity.product_family,
-                    collection="fake-collection",
-                ),
-            ))
-        return refs
-
-    def read_scene_bands(self, scene, sensor, bands, grid, pixel_cloud_mask):
-        import numpy as np
-
-        return {b: np.full((grid.height, grid.width), 0.5, dtype="f4") for b in bands}
-
-    def source_metadata(self, scene):
-        self.source_metadata_calls.append(scene.id)
-        return {"raw": True, "id": scene.id}
-
-
-def _tiny_config(temporal_mode: str, output_dir: str, bands=("red",), indices=()) -> Config:
-    return Config(
-        aoi=AOI(upper_left=(-122.43, 44.29), lower_right=(-122.40, 44.27)),
-        provider="fake",
-        sensors=[SensorSpec(name="landsat", resolution_m=300.0)],
-        date_range=DateRange(start=date(2023, 7, 1), end=date(2023, 7, 31)),
-        filters=Filters(max_cloud_percent=60, pixel_cloud_mask=False),
-        temporal_mode=temporal_mode, reduce="median",
-        output=OutputSpec(bands=bands, indices=indices, dir=output_dir, write_files=True),
-    )
-
-
 class EngineSnapshotWiringTests(unittest.TestCase):
     def test_source_metadata_ref_present_and_file_written(self):
-        provider = _FakeProviderWithSnapshot(ProductIdentity("landsat", USGS_C2_L2, SCENE), num_scenes=1)
-        with patch("data_loader.engine.get_provider", return_value=provider):
-            import tempfile
-            from data_loader.engine import run
+        import tempfile
 
-            with tempfile.TemporaryDirectory() as tmp:
-                run(_tiny_config("scene", tmp))
-                doc = json.loads((Path(tmp) / "manifest.json").read_text())
-                prov = doc["files"][0]["scenes"][0]["provenance"]
-                self.assertIsNotNone(prov["source_metadata_ref"])
-                snapshot_path = Path(tmp) / prov["source_metadata_ref"]
-                self.assertTrue(snapshot_path.exists())
-                self.assertEqual(json.loads(snapshot_path.read_text())["sourceRecord"], {"raw": True, "id": "fake-scene-0"})
+        from tests.fakes import FakeProvider, july, make_config, read_items, run_with
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_with(FakeProvider(july(1)), make_config(tmp))
+            row = read_items(tmp)[0]
+            ref = row["provenance"]["source_metadata_ref"]
+            self.assertEqual(ref, row["sourceMetadata"])
+            snapshot = Path(tmp) / ref
+            self.assertTrue(snapshot.exists())
+            self.assertEqual(json.loads(snapshot.read_text())["sourceRecord"], {"raw": True, "id": "scene-0"})
 
     def test_same_scene_not_fetched_twice_within_one_run(self):
-        """A scene contributing to both a bands file and an indices file
-        (two manifest entries) must only trigger one source_metadata()
-        call -- this is the "avoid unnecessarily multiplying network
-        calls" guarantee for providers like GEE where that call is real
-        network I/O."""
-        provider = _FakeProviderWithSnapshot(ProductIdentity("landsat", USGS_C2_L2, SCENE), num_scenes=1)
-        with patch("data_loader.engine.get_provider", return_value=provider):
-            import tempfile
-            from data_loader.engine import run
+        """bands + indices files for one scene: one source_metadata() call."""
+        import tempfile
 
-            with tempfile.TemporaryDirectory() as tmp:
-                run(_tiny_config("scene", tmp, bands=("red",), indices=("ndvi",)))
-                self.assertEqual(provider.source_metadata_calls.count("fake-scene-0"), 1)
+        from tests.fakes import FakeProvider, july, make_config, run_with
 
-    def test_composite_scenes_retain_source_metadata_refs(self):
-        provider = _FakeProviderWithSnapshot(ProductIdentity("landsat", USGS_C2_L2, SCENE), num_scenes=3)
-        with patch("data_loader.engine.get_provider", return_value=provider):
-            import tempfile
-            from data_loader.engine import run
+        p = FakeProvider(july(1))
+        with tempfile.TemporaryDirectory() as tmp:
+            run_with(p, make_config(tmp, output={"bands": ["red", "nir"], "indices": ["ndvi"]}))
+        self.assertEqual(p.source_metadata_calls.count("scene-0"), 1)
 
-            with tempfile.TemporaryDirectory() as tmp:
-                run(_tiny_config("annual_composite", tmp))
-                doc = json.loads((Path(tmp) / "manifest.json").read_text())
-                entry = next(e for e in doc["files"] if e["kind"] == "bands")
-                self.assertEqual(len(entry["scenes"]), 3)
-                for s in entry["scenes"]:
-                    ref = s["provenance"]["source_metadata_ref"]
-                    self.assertIsNotNone(ref)
-                    self.assertTrue((Path(tmp) / ref).exists())
+    def test_composite_sources_retain_source_metadata_refs(self):
+        import tempfile
+
+        from tests.fakes import FakeProvider, july, make_config, read_items, run_with
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_with(FakeProvider(july(3)), make_config(tmp, temporal_mode="annual_composite"))
+            row = read_items(tmp)[0]
+            self.assertEqual(len(row["sources"]), 3)
+            for s in row["sources"]:
+                self.assertIsNotNone(s["sourceMetadata"])
+                self.assertTrue((Path(tmp) / s["sourceMetadata"]).exists())
 
 
 if __name__ == "__main__":

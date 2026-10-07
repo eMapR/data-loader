@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-"""Runs data_loader.engine's ACTUAL scene-level concurrency dispatcher
+"""[Historical: drives the pre-1.0 DataLoader engine/config API. Re-run it from the
+`pre-1.0` git tag; see docs/development/benchmarks/README.md.]
+
+Runs data_loader.engine's ACTUAL scene-level concurrency dispatcher
 (`engine._run_scene_mode`) for one (provider, workers) combination, as a
 standalone subprocess. See ard_pc_concurrency_bench.py for why: an earlier
 benchmark in this project found that running multiple worker-count

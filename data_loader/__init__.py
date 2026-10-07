@@ -1,88 +1,38 @@
-"""Config-driven, multi-provider imagery data loader.
+"""DataLoader: config-driven satellite imagery acquisition.
 
-Point it at a YAML/JSON config (AOI, sensor(s), date range, provider,
-annual-composite-vs-scene, raw bands and/or indices) and it writes plain
-GeoTIFFs + a manifest.json to an output directory — usable from any
-downstream geoprocessing program, not just Python.
+Describe the imagery a pipeline needs in a YAML/JSON config (provider,
+sensor, AOI or tiles, years/season, bands, encoding); DataLoader finds it,
+downloads it, and writes GeoTIFFs plus a versioned manifest.json and
+items.jsonl that say exactly what was acquired, from where, and what was
+done to it.
 
-    python -m data_loader --config examples/annual_composite.yaml
+    data-loader run examples/quickstart.yaml          # command line
 
-For in-process use:
+    from data_loader import load_config, run, open_dataset
+    summary = run(load_config("examples/quickstart.yaml"))
+    ds = open_dataset(summary.output_dir)
+    for path, item, f in ds.files():
+        ...
 
-    from data_loader import load_config, run
-
-    result = run(load_config("examples/annual_composite.yaml"))
+See README.md and docs/ for the config reference and output contract.
 """
 from __future__ import annotations
 
-from data_loader.config import load_config
-from data_loader.engine import run
+from data_loader._version import __version__
+from data_loader.config import Config, ConfigError, config_from_dict, load_config
+from data_loader.dataset import Dataset, DatasetError, open_dataset
+from data_loader.engine import RunSummary, check_request, run
 
 __all__ = [
+    "__version__",
+    "Config",
+    "ConfigError",
+    "Dataset",
+    "DatasetError",
+    "RunSummary",
+    "check_request",
+    "config_from_dict",
     "load_config",
+    "open_dataset",
     "run",
-    "fetch_annual_nbr",
-    "pixel_index",
 ]
-
-
-def fetch_annual_nbr(
-    bbox,
-    start,
-    end,
-    *,
-    target_epsg=None,
-    res=30.0,
-    max_cloud=60.0,
-    months=(6, 7, 8, 9),
-    provider="planetary_computer",
-    cache_path=None,
-    **kwargs,
-):
-    """Back-compat shim for the original single-purpose loader.
-
-    Wraps the new config-driven engine to reproduce the old call shape
-    and return shape (annual NBR array, years, transform) for existing
-    callers (e.g. `example.py`) — new code should build a Config via
-    `load_config`/`Config(...)` instead, which supports scene mode,
-    multiple sensors, raw bands, and other indices.
-    """
-    from datetime import date
-
-    import numpy as np
-
-    from data_loader.config import AOI, Config, DateRange, Filters, OutputSpec, SensorSpec
-
-    season_start = f"{months[0]:02d}-01" if months else None
-    season_end = f"{months[-1]:02d}-28" if months else None
-
-    west, south, east, north = bbox
-    cfg = Config(
-        aoi=AOI(upper_left=(west, north), lower_right=(east, south)),
-        provider=provider,
-        sensors=[SensorSpec(name="landsat", resolution_m=res)],
-        date_range=DateRange(
-            start=date(start, 1, 1), end=date(end, 12, 31),
-            season_start=season_start, season_end=season_end,
-        ),
-        filters=Filters(max_cloud_percent=max_cloud, pixel_cloud_mask=True),
-        temporal_mode="annual_composite",
-        output=OutputSpec(bands=(), indices=("nbr",), dir="__fetch_annual_nbr_tmp__",
-                           target_epsg=target_epsg, write_files=False),
-    )
-    result = run(cfg)
-    landsat = result["landsat"]
-    years = np.asarray(sorted(landsat["composites"]), dtype=np.int32)
-    annual = np.stack([landsat["composites"][y]["indices"]["nbr"] for y in years]).astype("f4")
-    return annual, years, landsat["grid"].transform
-
-
-def pixel_index(transform, lon, lat, target_epsg):
-    """Lon/lat (EPSG:4326) -> (row, col) into an array on `transform`'s grid."""
-    from pyproj import Transformer
-    from rasterio.transform import rowcol
-
-    tf = Transformer.from_crs("EPSG:4326", target_epsg, always_xy=True)
-    x, y = tf.transform(lon, lat)
-    r, c = rowcol(transform, x, y)
-    return int(r), int(c)

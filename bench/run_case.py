@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-"""Runs exactly one benchmark case (one provider/AOI/date/repetition
+"""[Historical: drives the pre-1.0 DataLoader engine/config API. Re-run it from the
+`pre-1.0` git tag; see docs/development/benchmarks/README.md.]
+
+Runs exactly one benchmark case (one provider/AOI/date/repetition
 combination) as a standalone process, so peak RSS and any provider-level
 global state (HTTP sessions, GDAL config, EE init) never leak between runs.
 

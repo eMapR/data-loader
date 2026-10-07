@@ -1,10 +1,3 @@
-numpy
-rasterio
-pystac-client
-planetary-computer
-pyproj
-pyyaml
-requests
-
-# Optional — only needed for provider: gee
-# earthengine-api
+# Dependencies are declared in pyproject.toml. This file is kept for
+# `pip install -r requirements.txt`, which installs this repo in editable mode.
+-e .
