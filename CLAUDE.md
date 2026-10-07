@@ -86,10 +86,15 @@ The YAML config names tiles, date_range, bands, cloud_mask, save
 max_fails_per_obs, output_dir and summary_dir; unknown keys are errors.
 - `bench/configs/ard_tile_history_h003v004.yaml` -- the benchmark's config;
   `report` with it reproduces the committed summary byte-for-byte.
-- `bench/configs/ard_tile_history_oregon.yaml` -- template for all 23 Oregon
-  tiles (ordered by Oregon share), `qa_pixel: true`. NOT RUN: confirm the
-  tile list and end date with the user, and check free disk on the output
-  volume first (~4.1 TB+ as uint16; /vol/v1 had 15 TB free on 2026-10-05).
+- `bench/configs/ard_tile_history_oregon.yaml` -- all 23 Oregon tiles
+  (ordered by Oregon share, h003v004 re-acquired last), 1990-01-01 to
+  2026-10-07, `qa_pixel: true`. RUNNING since 2026-10-07 in tmux session
+  `oregon_ard` (`run --label oregon`; log `bench/results/
+  ard_tile_history_oregon/run.log`). Discovery: 88,932 observations (~29k
+  slivers). Early pace ~27 s/obs effective (USGS 504s, QA band write) vs the
+  15.9 s benchmark. Own output_dir/summary_dir, so the h003v004 benchmark
+  state and summary are untouched. Don't start a second run; to resume after
+  a reboot, re-run the same `run` command.
 - `save.qa_pixel` appends raw QA_PIXEL as the last band (scale 1, offset 0)
   via `usgs_ard.read_scene_bands(..., keep_qa=True)`; with `cloud_mask:
   false` + `qa_pixel: true` only fill is masked and nothing is lost.
