@@ -2,7 +2,9 @@
 
 A living engineering/scientific findings document — not a changelog. Updated when a benchmark, correctness test, provider investigation, or production-scale experiment produces a significant finding. Routine code changes are not recorded here.
 
-*Last updated: 2026-09-22*
+*Last updated: 2026-10-07*
+
+This is the historical record of what was measured and why decisions were made. How DataLoader 1.0 is put together today is in [README.md](README.md); user documentation is in [`docs/`](../).
 
 ## Purpose
 
@@ -19,6 +21,8 @@ request/config → product contract → provider → imagery acquisition
 - **Provider** (`data_loader/providers/`): WHERE imagery comes from.
 - **Acquisition → masking → output**: `engine.py` drives `search_scenes`/`read_scene_bands`/(optional) `read_annual_composite`, applies QA masking, writes GeoTIFFs.
 - **Provenance**: normalized per-scene metadata plus a full source-record snapshot (see below), recorded in `manifest.json`.
+
+*(As of 1.0, 2026-10-07, the same layers remain but the engine is one resumable pipeline for both AOI pulls and tile archives, and provenance lives in a versioned `manifest.json` + `items.jsonl` -- see "DataLoader 1.0" below.)*
 
 **Providers implemented and their key limitations:**
 
@@ -374,6 +378,43 @@ Direct follow-up, per explicit instruction: repeat the identical complete-pipeli
 3. **ARD's reliability under this round's real, hours-long runs was at least as good as PC's**: zero failures for both, and ARD's per-unit timing was consistently far *less variable* than PC's (17–23s vs. 38–148s at 4-tile scale) — lower variance is itself valuable for estimating and budgeting a multi-day production run.
 4. **Caveat, stated plainly**: this recommendation rests on two AOI-size data points (2-tile, 4-tile) at one AOI shape and one 2-year period. It is a directional, mechanism-backed call, not a proof that ARD wins at every scale — see "Open questions" for the natural confirming test (8-tile or larger) before committing irreversible time to the full Oregon run.
 
+### Complete ARD tile history: h003v004 (2026-10-02..04)
+
+Measured the real cost of acquiring one ARD tile's entire Landsat history directly from USGS: tile `h003v004` (central Oregon Cascades, 5000×5000 px at 30 m), 1990-01-01 to 2026-10-02, Landsat 4/5/7/8/9, 6 SR bands + QA_PIXEL, with `bench/ard_tile_history_bench.py` (config `bench/configs/ard_tile_history_h003v004.yaml`; summary [`benchmarks/data/ard_tile_history_h003v004.json`](benchmarks/data/ard_tile_history_h003v004.json), overall and per attempt).
+
+- **3,885 / 3,885 observations acquired, 0 permanently failed, 14.8 h wall** (4 workers, saved as uint16 original C2 SR DN with cloud/shadow/cirrus/fill = 0), 523 GB transferred, 189 GB saved.
+- Two passes. 2,411 observations found by a first discovery over a 0.1° center AOI: 10.7 h, 15.9 s/obs effective, ~202 MB/obs; per observation per worker ~20 s download+decode, ~12 s M2M minting (queueing on the one-request-at-a-time account limit), ~16 s single-threaded deflate write. Then **1,474 edge "slivers"** the center AOI missed: an ARD item's STAC geometry is its data footprint, so observations from neighboring WRS-2 paths that only clip the tile edge (~92% fill) need a whole-tile search filtered to the tile's grid h/v. 4.2 h, 10.2 s/obs, ~24 MB/obs.
+- **Full-tile reads on the native grid download whole band files in parallel and decode from memory** (`usgs_ard._read_native_tile`): ~110 s → ~10 s per observation, bit-identical to the `/vsicurl` + WarpedVRT path. GDAL's many small range requests, one band after another, were latency-bound; the network was never the limit (`bench/bandwidth_check.py`, `bench/ard_read_path_compare.py`).
+- The 90-minute M2M re-login now queues behind the same M2M call lock and retries `RATE_LIMIT` (it caused 27 failed attempts before the fix).
+- **SR fill (DN 0) is nodata, not reflectance −0.2**, in `usgs_ard` and `stac_common` (`masking.dn_to_reflectance`); float32 outputs written before 2026-10-03 carry −0.2 fill. uint16 output was never affected.
+
+### Oregon-scale ARD estimate (2026-10-04)
+
+`bench/oregon_ard_estimate.py` → [`benchmarks/data/oregon_ard_estimate.json`](benchmarks/data/oregon_ard_estimate.json) scales the measured h003v004 costs to every CONUS ARD tile touching Oregon, with per-tile observation counts and fill from the LandsatLook STAC: **23 tiles** (18 with ≥5% Oregon share), **~88,900 observations** 1990–2026 (~29k slivers), ~11.4 TB transfer, ~4.1 TB stored as masked uint16 without QA, **~347 h (14.5 days)** for all 23 tiles at 4 workers on one M2M account. Floor from serial M2M minting (~4.7 s/obs): ~116 h. A whole-tile discovery on 2026-10-07 found exactly 88,932. A first production attempt (the bench harness, with QA_PIXEL kept and cloud masking on) ran at ~23–27 s/obs effective during a period of frequent landsatlook 504s; stored size with QA_PIXEL was ~82 MB per full observation and ~6 MB per sliver.
+
+### Sentinel-2 baseline ≥ 04.00 reflectance offset (2026-10-07)
+
+ESA processing baseline 04.00 (from 2022-01-25) adds −1000 DN to L2A surface reflectance. DataLoader had scaled every Sentinel-2 item with offset 0. Checked live on tile 10TDQ open ocean (B08):
+
+| Catalog | 2021 (baseline 03.00 / ES reprocessed 05.00) | 2023-07-14 (baseline 05.09) |
+|---|---|---|
+| Planetary Computer | p1 DN 19 | p1 DN 1234 |
+| Earth Search | p1 DN 18 | p1 DN 234 (`earthsearch:boa_offset_applied: true`) |
+
+So Planetary Computer serves ESA's DN unchanged (2022+ data needs offset −0.1; DataLoader's 2022+ PC Sentinel-2 reflectance was ~0.1 too high), while **Earth Search has already removed the offset from its pixels** even though its `raster:bands` metadata still declares −0.1 (applying it would make reflectance ~0.1 too low). `stac_common.item_sr_scale_offset` now applies 0 for `boa_offset_applied` items, −0.1 for baseline ≥ 04.00 otherwise, 0 before; the value used is recorded per item in provenance.
+
+### DataLoader 1.0 (2026-10-07)
+
+Prepared for hand-off to other eMapR pipelines. The benchmark harness that built the h003v004 history had become the real archive tool; 1.0 folds that into the one engine instead of keeping a separate archive implementation:
+
+- **One engine, every request shape.** A tile archive is a scene-mode request with `aoi.tiles`, `grid.crs: native` and `output.encoding: native` (uint16 DN + scale/offset, optional raw QA band). Whole-tile discovery (slivers included), native-grid whole-file reads, uint16 encoding and per-acquisition journaling moved from the bench script into `data_loader` (`tiles.py`, `usgs_ard.search_tile`, `read_scene_native`, `geotiff.py`, `dataset.py`).
+- **Archives keep source observations.** Defaults are now `max_cloud_percent: 100` and `pixel_cloud_mask: false`; masking is opt-in and its exact QA rules are recorded in the manifest. The scene cloud filter is applied client-side so excluded scenes are listed (`status: filtered`) rather than invisible, and a filter at 100 no longer drops 100%-cloud scenes (`lt 100` did).
+- **Dataset contract**: `manifest.json` (schema `dataloader-manifest` 1.0) + `items.jsonl` (one row per acquisition with status, files, sha256, provenance) + verbatim provider metadata snapshots. Every run is resumable (journal + atomic writes + per-directory lock), retries failures up to `max_attempts` across runs, and an open-ended or extended time range updates the dataset in place.
+- **Config v1**: strict keys at every level; `start_year`/`end_year` (whole years, inclusive -- fixing the pre-1.0 trap where `end: 2020` meant 2020-01-01) or exact dates; seasons that wrap New Year, labelled by the year they start in.
+- GeoTIFF writes use GDAL's multi-threaded deflate (`NUM_THREADS=ALL_CPUS`): rewriting a real 183 MB full-tile uint16 + QA file took 24.1 s single-threaded vs 1.3 s, identical size -- the write was ~40% of per-observation time in the bench-harness runs.
+- ARD discovery handles are compact (`usgs_ard.CompactItem`: properties + zlib-compressed verbatim record): a full ARD STAC item is ~85 KB as a dict and ~140 KB as a `pystac.Item`, ~12 GB for Oregon's 89k observations held through a run.
+- Planned next: vector AOIs; Sentinel-2 direct from the Copernicus Data Space Ecosystem.
+
 ## Scaling limitations identified
 
 **Fundamental / external (not something DataLoader controls):**
@@ -383,7 +424,7 @@ Direct follow-up, per explicit instruction: repeat the identical complete-pipeli
 
 **DataLoader-side, improvable:**
 - ~~Fully serial scene/band reads — no concurrency implemented yet~~ **Scene-level concurrency implemented and measured 2026-09-16** (`config.workers`, default 1). Remaining limitation: efficiency drops off steeply past ~2–4 workers (measured 85% at 2 workers down to 39% at 8) — network/provider I/O throughput, not DataLoader's own dispatch overhead, appears to be the ceiling (CPU utilization stayed under 30% throughout). Where that ceiling actually sits (whether workers >8 keep helping at all) was not tested.
-- No caching of search results or read pixels yet
+- No caching of search results or read pixels yet. (1.0: a resumable dataset is the cache -- re-runs skip acquired observations.)
 - Local compositing (`np.stack` + reduce) holds all contributing scenes' arrays in memory simultaneously — a real memory-scaling concern for large AOIs/long time series, not yet addressed. Concurrency's per-scene reads for the local-reduce composite path are now parallelized too (same `config.workers`), which does not change this memory characteristic — the reduce step still waits for and holds every contributing scene's arrays at once.
 - AOI search is bbox-only, not true-polygon — inflates scene counts with near-zero-overlap "corner" scenes for irregularly-shaped regions like Oregon. **Measured 2026-09-18**: for a ~40×45 km AOI spanning multiple WRS-2 path/rows, Planetary Computer returns 59 units for 37 distinct dates (22 same-date partial scenes needing downstream mosaicking), where USGS ARD returns 26 units / 26 dates / 0 duplicates from a single fixed tile — one concrete case where a fixed-tile backend sidesteps this limitation entirely.
 - Scene-level output persistence, if a workflow chooses it, can require very large storage at scale (as this stress test shows) — a downstream workflow design choice DataLoader should support but not assume
@@ -414,7 +455,7 @@ The Oregon benchmark is **intentionally a stress test** designed to expose scali
 17. Exercise `usgs_m2m.py`'s scene-bundle read path end-to-end now that M2M auth works — or consider whether the per-band access model proven for ARD (`D771`) also applies to scene-based Collection 2, which would make that provider far lighter.
 18. Investigate why ARD and PC disagree on which dates pass a 40% cloud-cover filter for the same AOI/period (observed at both 2-tile: 40 vs. 34 dates, and 4-tile: 44 vs. 36 dates, 2026-09-20/21) — likely explained by tile-level vs. scene-level cloud-cover computation over different-shaped large areas, not yet confirmed.
 19. Understand why blue-band agreement is measurably weaker than the other five bands in both complete-pipeline comparability checks (2-tile: 0.92–0.98 vs. ≥0.998; 4-tile: similar pattern) — plausibly residual atmospheric/aerosol correction differences between the two processing chains, not yet isolated from other candidate causes.
-20. **Recommended next, before committing to the full Oregon run: one confirming test at 8-tile (or larger/differently-shaped) scale**, specifically to check whether PC's per-unit cost keeps growing (strengthening the ARD recommendation) or plateaus (which would weaken it) — only two scale points (2-tile, 4-tile) support the current trend-based decision.
+20. One confirming test at 8-tile (or larger/differently-shaped) scale. **Smoke test done 2026-09-28** (6 sampled dates, 41 Mpx window): ARD mean 71 s/unit (median 57), PC mean 108 s/unit (median 45), with very wide ranges; projected full runs ARD ~7.1 h vs PC ~5.0 h. Inconclusive on speed. ARD was chosen for the Oregon archive on authority, completeness (Landsat 4) and its fixed tiling rather than on speed; a full 8-tile run was not done.
 21. Diagnose the actual root cause of PC's steeper per-unit cost growth with window size (COG internal tiling was checked live and ruled out — both providers use identical 256×256 blocks) — network/CDN-layer differences (Azure Blob vs. CloudFront-backed delivery) are the leading hypothesis but were not directly instrumented.
 22. Once ARD is confirmed as the chosen strategy, revisit ARD's own scene-level concurrency now that its per-unit cost is known to be the more favorable and more stable of the two at large window sizes — the earlier concurrency benchmark used a small fixed window; a large-window concurrency test was never run for either provider.
 

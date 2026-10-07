@@ -1,9 +1,13 @@
+# SUPERSEDED: the production Oregon archive is examples/oregon_landsat_ard_archive.yaml
+# (`data-loader run`). This bench config is kept as the record of the first,
+# benchmark-harness attempt (cloud-masked, QA_PIXEL kept).
+#
 # Template: complete Landsat ARD history for every CONUS ARD tile touching
 # Oregon (23 tiles, from bench/oregon_ard_estimate.py; Oregon share in the
 # comments). Estimated ~88,900 observations, ~11.4 TB transfer, ~4.1 TB
 # saved as uint16 (+QA_PIXEL adds a little), ~14.5 days on one M2M account
-# at 4 workers -- see docs/benchmarks/data/oregon_ard_estimate.json.
-# Started 2026-10-07: all 23 tiles, end date 2026-10-07 (/vol/v1 had 15 TB
+# at 4 workers -- see docs/development/benchmarks/data/oregon_ard_estimate.json.
+# Started 2026-10-07: all 23 tiles, end date 2026-10-07 (the output volume had 15 TB
 # free). Tiles are processed in the order listed; `run` is resumable per
 # tile. Own output_dir/summary_dir so the h003v004 benchmark's state and
 # committed summary are untouched; h003v004 is re-acquired here (last) with
@@ -51,4 +55,4 @@ save:
 workers: 4
 max_fails_per_obs: 3
 output_dir: bench/results/ard_tile_history_oregon
-summary_dir: docs/benchmarks/data/oregon_ard_history
+summary_dir: docs/development/benchmarks/data/oregon_ard_history

@@ -1,5 +1,5 @@
 """Case matrix for the large-COG-window validation benchmark (see
-docs/DATALOADER_DEVELOPMENT_REPORT.md, "Large-window COG read validation").
+docs/development/DATALOADER_DEVELOPMENT_REPORT.md, "Large-window COG read validation").
 
 Purpose: the Oregon stress test's serial-runtime model was fit almost
 entirely from small/medium AOI reads (largest actually timed: ~2,000,000

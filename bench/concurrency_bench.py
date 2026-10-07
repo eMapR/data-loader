@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """Orchestrator for the scene-level concurrency scaling benchmark (see
-docs/DATALOADER_DEVELOPMENT_REPORT.md, "Measured concurrency scaling").
+docs/development/DATALOADER_DEVELOPMENT_REPORT.md, "Measured concurrency scaling").
 
 Runs the SAME representative large-Landsat workload (concurrency_run_case.
 AOI_BBOX: a ~19M-pixel window -- this project's measured average real

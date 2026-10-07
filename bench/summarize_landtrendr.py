@@ -4,7 +4,7 @@
 JSON file, and -- for smoke runs -- project what the full run would cost.
 
 Reads the (git-ignored) raw results under bench/results/landtrendr_ready*/
-and writes docs/benchmarks/data/landtrendr_scaling.json. Prints only a short
+and writes docs/development/benchmarks/data/landtrendr_scaling.json. Prints only a short
 table, so it can be re-run cheaply whenever a new result lands.
 
 Usage:

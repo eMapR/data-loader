@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-"""Generate tracked figures in docs/figures/ from the compact benchmark
-summaries in docs/benchmarks/data/ (run bench/summarize_landtrendr.py first).
+"""Generate tracked figures in docs/development/figures/ from the compact benchmark
+summaries in docs/development/benchmarks/data/ (run bench/summarize_landtrendr.py first).
 
 Usage:
     python bench/make_figures.py

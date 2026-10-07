@@ -7,7 +7,7 @@ each (provider, workers) combination as its own subprocess
 process isolation matters here (GDAL /vsicurl cache leakage across runs,
 discovered the hard way in the tile-boundary scaling benchmark).
 
-Answers, from measured data (see docs/DATALOADER_DEVELOPMENT_REPORT.md,
+Answers, from measured data (see docs/development/DATALOADER_DEVELOPMENT_REPORT.md,
 "ARD vs PC concurrency scaling"):
 - Does concurrency close the ~3-4x per-unit gap between ARD and PC found
   in the serial tile-boundary benchmark, or does a fixed cost remain?

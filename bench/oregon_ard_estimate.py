@@ -2,7 +2,7 @@
 """How long would the full ARD Landsat history for all of Oregon take?
 
 Scales the measured h003v004 tile-history run
-(docs/benchmarks/data/ard_tile_history_h003v004.json) to every CONUS ARD
+(docs/development/benchmarks/data/ard_tile_history_h003v004.json) to every CONUS ARD
 tile that touches Oregon:
 
 1. Oregon's boundary (PublicaMundi us-states GeoJSON, a low-resolution
@@ -28,7 +28,7 @@ M2M allows one request at a time per account.
 
     python bench/oregon_ard_estimate.py
 
-Writes docs/benchmarks/data/oregon_ard_estimate.json.
+Writes docs/development/benchmarks/data/oregon_ard_estimate.json.
 """
 from __future__ import annotations
 

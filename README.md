@@ -1,174 +1,164 @@
-# data-loader
+# DataLoader
 
-A dynamic, config-driven imagery data loader for geoprocessing: describe
-what you want in a YAML/JSON file (AOI, sensor(s), date range, data
-source, annual composites vs. every individual scene, raw bands and/or
-derived indices) and run it. It writes plain GeoTIFFs + a `manifest.json`
-to an output directory — readable by any downstream program, not just
-Python.
+DataLoader is the imagery-acquisition front end for eMapR pipelines
+(LandTrendr, BULC-D, BugNet, foundation-model work, ...). A pipeline
+describes the imagery it needs in a small YAML config: provider, sensor,
+area, years/season, bands. DataLoader then finds it, downloads it, and
+writes plain GeoTIFFs plus a **versioned, machine-readable manifest**
+recording what was acquired, where it came from, and what was done to it.
+Downstream code reads the manifest and never needs provider-specific code
+or filename parsing.
 
-Originally extracted from LT-rust's `python/fetch_nbr.py` (a single
-Planetary-Computer-only, NBR-only fetch function); generalized into a
-pluggable multi-provider, multi-index, multi-mode loader.
+```
+config.yaml ──► DataLoader ──► provider (USGS ARD, Planetary Computer, Earth Search, ...)
+                    │
+                    └──► <output.dir>/  GeoTIFFs + manifest.json + items.jsonl + source metadata
+                                              │
+                                              └──► your pipeline
+```
+
+- **One tool for small pulls and big archives.** A one-month AOI and a
+  35-year, 23-tile Landsat archive use the same command and produce the same
+  output layout. The difference is only in the config.
+- **Resumable and updatable.** If a run is interrupted, run the same command
+  again and it picks up where it stopped. Leave the end year open and
+  re-running later adds the new imagery.
+- **Provider-independent.** Change `provider:` to switch sources. Before
+  downloading, DataLoader checks that the provider supplies the scientific
+  product you asked for.
+- **Nothing hidden.** Cloud masking is off unless you ask for it. QA bands can be
+  kept, source metadata is saved verbatim, and failures are recorded rather
+  than silently dropped.
 
 ## Install
 
-```bash
-pip install -r requirements.txt
-# only if you'll use provider: gee —
-pip install earthengine-api
-```
-
-## Use
+Python 3.9 or newer. Everything installs from pip; GDAL comes bundled with
+the `rasterio` wheel.
 
 ```bash
-python -m data_loader --config examples/annual_composite.yaml
-python -m data_loader --config examples/scene_mode.yaml
+git clone https://github.com/eMapR/data-loader.git
+cd data-loader
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .            # add '.[gee]' for Google Earth Engine, '.[dev]' for tests
+data-loader --version
 ```
 
-Or in-process:
+## Five-minute example
+
+[`examples/quickstart.yaml`](examples/quickstart.yaml) pulls every Landsat scene over a small Oregon AOI
+for July 2023 from Microsoft Planetary Computer. It needs no account.
+
+```yaml
+version: 1
+provider: planetary_computer
+sensors: [landsat]
+aoi:
+  upper_left: [-122.4327, 44.2860]     # [lon, lat]
+  lower_right: [-122.3426, 44.2315]
+time:
+  start_date: 2023-07-01
+  end_date: 2023-07-31
+temporal_mode: scene                   # or annual_composite
+output:
+  dir: output/quickstart
+  bands: [red, nir]
+  indices: [ndvi]
+  qa_band: true
+```
+
+```bash
+data-loader validate examples/quickstart.yaml   # checks the config, no network
+data-loader run examples/quickstart.yaml        # ~1 minute; prints the manifest path
+data-loader status output/quickstart
+```
+
+```
+output/quickstart/
+  manifest.json            what this dataset is: request, product, bands, grids, processing, counts
+  items.jsonl              one line per acquisition: date, sensor, source ID, status, files, checksums, provenance
+  request.yaml             the exact request that produced it
+  metadata/<provider>/     each source item's original metadata record, verbatim
+  landsat/aoi/2023/2023-07-04_LE07_L2SP_045029_20230704_02_T1_bands.tif
+  landsat/aoi/2023/2023-07-04_LE07_L2SP_045029_20230704_02_T1_indices.tif
+  ...
+```
+
+Reading it from Python:
 
 ```python
-from data_loader import load_config, run
+from data_loader import open_dataset
+import rasterio
 
-result = run(load_config("examples/annual_composite.yaml"))
-# result["landsat"]["composites"][2020]["indices"]["nbr"]  -> (H, W) float32 array
+ds = open_dataset("output/quickstart")
+print(ds.manifest["bandSets"]["landsat"]["bands"])      # band order, dtype, scale/offset, nodata, QA meaning
+for path, item, f in ds.files(start="2023-07-10"):
+    with rasterio.open(path) as src:
+        red = src.read(1)
+    print(item["date"], item["itemId"], item["eo:cloud_cover"])
 ```
 
-## Config
+Adapt the example: edit the corners, dates, and bands, and point
+`output.dir` (or `--output-dir`) somewhere new.
+
+## Choosing a provider
+
+| Provider | Data | Account | Use it for |
+|---|---|---|---|
+| `usgs_ard` | Landsat 4–9 C2 **U.S. ARD** SR, straight from USGS | USGS EROS + M2M token | **Preferred for Landsat time series and archives.** USGS is the authoritative source, it covers Landsat 4–9, and every observation sits on a fixed 5000×5000 px Albers tile grid. |
+| `planetary_computer` | Landsat 5–9 C2 L2 and Sentinel-2 L2A | none | Quick AOI pulls and Sentinel-2 with no setup. |
+| `aws_earth_search` | Sentinel-2 L2A (free); Landsat (AWS Requester Pays) | none for Sentinel-2 | Sentinel-2. Its Landsat bucket bills an AWS account. |
+| `gee` | Landsat C2 L2, Sentinel-2 SR (harmonized) | Earth Engine project | Exploratory small AOIs. Requests are capped at ~48 MB each. |
+| `glad_ard` | GLAD 16-day Landsat ARD, 2020+ | none | GLAD's normalized 16-day composites specifically. |
+| `usgs_m2m` | Landsat C2 L2 scene bundles | USGS EROS + M2M token | Experimental: the bundle download path has not been verified end to end. |
+
+The full comparison, with caveats such as DataLoader's Planetary Computer
+Landsat path covering Landsat 5–9 only and how Sentinel-2 processing versions are handled, is
+in [docs/providers.md](docs/providers.md). The USGS account setup is in
+[docs/getting-started.md](docs/getting-started.md#usgs-eros-account-and-m2m-token-usgs_ard-usgs_m2m).
+
+## Archives: whole tiles, full history
+
+For a persistent archive, request whole USGS ARD tiles. DataLoader then
+stores each observation exactly as USGS distributes it: uint16 DN with
+QA_PIXEL, no cloud masking, and no resampling. Downstream pipelines make
+their own cloud, shadow and snow decisions.
 
 ```yaml
 aoi:
-  upper_left: [-123.855, 45.896]   # [lon, lat], EPSG:4326
-  lower_right: [-123.835, 45.882]  # [lon, lat], EPSG:4326
-
-provider: planetary_computer     # planetary_computer | aws_earth_search | gee | usgs_ard | usgs_m2m | glad_ard
-
-sensors:
-  - name: landsat                # landsat | sentinel2
-    resolution_m: 30             # optional, default per sensor if omitted
-  - name: sentinel2
-    resolution_m: 10
-
-date_range:
-  start: "2018-01-01"            # ISO date, day precision
-  end: "2024-12-31"
-  season_start: "06-01"          # MM-DD, optional — in-season window
-  season_end: "09-15"            #   applied within every year in [start, end]
-
-filters:
-  max_cloud_percent: 60          # scene-level metadata filter
-  pixel_cloud_mask: true         # per-pixel QA/SCL masking (bad pixels -> NaN)
-
-temporal_mode: annual_composite  # annual_composite | scene
-reduce: median                   # median | mean — only used for annual_composite
-
+  tiles: [h003v004, h003v005]
+time:
+  start_year: 1990                     # no end_year: through today, updatable
+temporal_mode: scene
 output:
-  bands: [blue, green, red, nir, swir1, swir2]   # raw bands to write (omit = none)
-  indices: [nbr, ndvi]                            # derived indices to write (omit = none)
-  dir: output/my_aoi
-  target_epsg: null              # auto-picks a UTM zone from the bbox centroid if null
-
-provider_options: {}             # e.g. {gee_project: "your-ee-project"} for provider: gee
-                                  # or {usgs_username, usgs_token} for provider: usgs_m2m
-                                  # (env vars preferred over putting these in the config file)
+  encoding: native
+  bands: [blue, green, red, nir, swir1, swir2]
+  qa_band: true
 ```
 
-Requesting an index that isn't in `output.bands` still works — the loader
-fetches whatever raw bands the index needs internally, it just doesn't
-write them as a separate file unless you also list them in `output.bands`.
+See [`examples/usgs_ard_tile_archive.yaml`](examples/usgs_ard_tile_archive.yaml) and eMapR's Oregon archive
+[`examples/oregon_landsat_ard_archive.yaml`](examples/oregon_landsat_ard_archive.yaml), along with
+[docs/large-jobs.md](docs/large-jobs.md) for runtime, storage, tmux, resume and updates. The
+Oregon archive is about 89,000 observations, takes 2–4 weeks on one USGS
+account, and needs roughly 4–5 TB.
 
-### Providers
+## Documentation
 
-| provider | auth | notes |
-|---|---|---|
-| `planetary_computer` | none | Microsoft's free STAC API + signed COG reads |
-| `aws_earth_search` | none | Element84's Earth Search STAC API over AWS Open Data |
-| `gee` | Earth Engine account + project | ad hoc `getDownloadURL` fetch, no batch/Drive step — see `data_loader/providers/gee.py`. Good for exploratory AOIs; capped around 48MB per request. |
-| `usgs_ard` | EROS account + M2M token | Landsat Collection 2 U.S. ARD surface reflectance, read per band directly from USGS on the fixed national Albers tile grid. Landsat only, CONUS/AK/HI only. M2M allows one request at a time per account, which caps concurrency — see the report. |
-| `usgs_m2m` | EROS account + M2M token | Scene-based Landsat Collection 2 (no Sentinel-2). Heavier than the STAC providers — each scene is a full bundle download + local extraction. M2M auth verified live; the bundle read path has not yet been exercised end-to-end. |
-| `glad_ard` | none | GLAD (UMD) 16-day normalized Landsat ARD tiles from the public S3 mirror, 2020–present. Landsat only. |
+| | |
+|---|---|
+| [Getting started](docs/getting-started.md) | Install, credentials for each provider, first runs |
+| [Configuration](docs/configuration.md) | Every config key; years, seasons and dates; AOIs and tiles; migrating old configs |
+| [Providers](docs/providers.md) | What each provider serves, accounts and costs, when to choose which |
+| [Outputs](docs/outputs.md) | Directory layout, `manifest.json` and `items.jsonl` field by field, reading data, masking with QA |
+| [Large jobs](docs/large-jobs.md) | Archives, runtime and storage, resume, updates, failures |
+| [Troubleshooting](docs/troubleshooting.md) | Common errors and fixes |
+| [Development](docs/development/README.md) | Architecture, adding a provider, tests, benchmarks and development history |
 
-Credentials are read from environment variables (see `.env.example`;
-copy it to `.env`, which is git-ignored) rather than from config files.
+Example configs live in [`examples/`](examples/). Run the tests with
+`pytest` (they need no network or credentials).
 
-### Output layout
+## Status
 
-Raw bands and indices are written to separate files (different scaling —
-reflectance vs. unitless), one file per sensor per year (composite mode)
-or per scene (scene mode):
-
-```
-output.dir/
-  manifest.json
-  landsat/
-    bands_2018.tif       # present only if output.bands is non-empty
-    indices_2018.tif     # present only if output.indices is non-empty
-  sentinel2/
-    bands_2018.tif
-    indices_2018.tif
-```
-
-In `scene` mode, `_2018.tif` becomes `_<date>_<scene-id>.tif` per scene
-instead of one file per year. Every file is float32 with `NaN` as nodata
-(no scale-factor/int16 trick — this loader targets general geoprocessing,
-not the storage-constrained on-device use case GeoTimeSeriesApp3 uses
-Cloud-Optimized GeoTIFFs for). `manifest.json` records each file's
-provider, sensor, band names, CRS, transform, and (for composites) the
-reducer used — the contract any downstream program reads to know what's
-on disk without guessing filenames.
-
-## Notes / known limitations
-
-- AOI is bbox only for now — no polygon/route-corridor support (see
-  GeoTimeSeriesApp3's `gee_export/export_timeseries.py` for that, a
-  separate, unrelated pipeline this loader doesn't touch).
-- `target_epsg` auto-picks a UTM zone from the bbox centroid if left
-  unset — fine for small AOIs, pick one explicitly for anything crossing
-  a zone boundary.
-- Cloud masking: Landsat via `QA_PIXEL` bits 1–4 (dilated cloud, cirrus,
-  cloud, cloud shadow); Sentinel-2 via Scene Classification (`SCL`)
-  values 3/8/9/10 (cloud shadow, cloud med/high probability, thin
-  cirrus). No terrain-shadow or snow masking.
-- The `gee` provider's `season_start`/`season_end` window is computed
-  per calendar year and doesn't handle a window that wraps the year
-  boundary (e.g. `season_start: "11-01"`, `season_end: "02-28"`) in its
-  fast composite path — falls back to the generic per-scene path in that
-  case, which does handle wrap-around.
-- Scene-level reads can run concurrently via `workers:` in the config
-  (default 1). Gains flatten past ~2–4 workers (network/provider bound);
-  `usgs_ard` is further limited by M2M's one-request-at-a-time rule.
-- Local compositing holds every contributing scene for a composite in
-  memory at once — watch memory on large AOIs / long periods.
-
-## Findings and benchmarks
-
-DataLoader is also where we record what we've measured about the
-providers — speed, scaling, reliability, and whether two sources produce
-scientifically equivalent products.
-
-- [`docs/DATALOADER_DEVELOPMENT_REPORT.md`](docs/DATALOADER_DEVELOPMENT_REPORT.md) —
-  the full development and scientific report: architecture, correctness
-  bugs found and fixed, provenance, performance findings, open questions.
-- [`docs/benchmarks/README.md`](docs/benchmarks/README.md) — methodology and
-  headline results for each benchmark, and how to re-run it.
-- [`docs/figures/`](docs/figures/) — figures generated from benchmark results.
-
-## Repository layout
-
-```
-data_loader/          the loader: config, engine, masking, indices, manifest
-  providers/          one module per imagery source (shared Provider interface)
-examples/             example YAML configs
-tests/                unit tests (pytest; network-free)
-bench/                benchmark harnesses and analysis scripts
-  results/            raw benchmark outputs + imagery — git-ignored, can be 10s of GB
-docs/
-  DATALOADER_DEVELOPMENT_REPORT.md
-  benchmarks/         methodology + results summaries
-    data/             compact summary JSON extracted from bench/results (tracked)
-  figures/            generated figures we want to keep (tracked)
-```
-
-Raw benchmark outputs and generated imagery stay out of Git; only compact
-summaries and figures, produced by scripts in `bench/`, are committed.
+Version 1.0. The config schema (`version: 1`) and the output manifest
+(`dataloader-manifest` 1.0) are the stable interfaces; see
+[CHANGELOG.md](CHANGELOG.md). Planned next: vector (GeoJSON) AOIs, and
+Sentinel-2 directly from the Copernicus Data Space Ecosystem.
