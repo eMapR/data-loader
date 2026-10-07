@@ -133,7 +133,7 @@ metadata snapshot), `failedSources`, and `method` (`local` or `provider`).
 | Status | Meaning |
 |---|---|
 | `acquired` | Files written and checksummed. |
-| `failed` | Every attempt so far failed. `error` holds the last message and `attempts` the count. Re-running retries it until `max_attempts`. |
+| `failed` | Every attempt so far failed. `error` holds the last message and `attempts` the count. A run retries failures until `max_attempts` in total; a later run continues if attempts remain. |
 | `pending` | Discovered but not acquired yet: the run was interrupted, or is still in progress. |
 | `filtered` | Excluded by `filters.max_cloud_percent`. `reason` says why. Nothing is written. |
 

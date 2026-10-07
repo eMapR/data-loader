@@ -30,7 +30,7 @@ stable interfaces from here on.
   native-grid reads with no resampling, and `output.encoding: native`
   (uint16 DN with scale/offset) with `output.qa_band` (raw QA_PIXEL or SCL).
 - **Resumable, updatable datasets:** per-acquisition journal, atomic
-  writes, a per-directory lock, retries up to `max_attempts` across runs,
+  writes, a per-directory lock, in-run retry passes up to `max_attempts`,
   open-ended time ranges, and protection against mixing different
   requests in one directory.
 - **Time windows:** `start_year`/`end_year` (whole years, inclusive) or

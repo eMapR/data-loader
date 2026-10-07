@@ -60,12 +60,15 @@ fetch.
   slivers). That's roughly 3–4 weeks, about 11 TB downloaded and about
   5–6 TB stored.
 
-These times were measured with the pre-1.0 benchmark harness, whose
-single-threaded GeoTIFF writes took ~16–24 s per full tile. DataLoader 1.0
-writes the same file in ~1–2 s (multi-threaded compression), so expect
-faster runs; the floor is set by USGS: the M2M one-call-at-a-time limit
-(~5 s per observation), and how fast landsatlook.usgs.gov responds (it
-sometimes returns 504s, which are retried). Unmasked archives compress somewhat less well than masked
+The per-observation figures above come from the pre-1.0 benchmark
+harness, whose single-threaded GeoTIFF writes took ~16–24 s per full tile.
+DataLoader 1.0 writes the same file in ~1–3 s (multi-threaded
+compression): its first live run, 11 observations of one tile in
+July 2023 with 4 workers, averaged ~11 s per observation effective. The
+floor is set by USGS: the M2M one-call-at-a-time limit (~5 s per
+observation), and how fast landsatlook.usgs.gov responds (it sometimes
+returns 504s, which are retried, first per file, then in retry passes of
+the same run). Unmasked archives compress somewhat less well than masked
 ones. Check free space before starting (`df -h`), and leave room to
 spare. The measurements and the Oregon estimate behind these numbers are
 in [development](development/README.md).
@@ -121,9 +124,11 @@ data-loader run my_archive.yaml
 - Acquired observations are skipped, and their files are checked against
   their recorded size.
 - Failed observations are retried, up to `max_attempts` attempts in total
-  across runs (default 3). After that they stay `failed`, with the last
-  error, in `items.jsonl`. To try again later, raise `max_attempts` and
-  re-run.
+  (default 3). Within a run, failures get retry passes at the end (60 s
+  pause first), so a single `run` usually finishes everything. Attempts
+  carry over across runs; after the last one an observation stays
+  `failed`, with the last error, in `items.jsonl`. To try again later,
+  raise `max_attempts` and re-run.
 - Exit code `0` means complete, `3` means some observations are failed
   or pending (re-run to retry), and `2` means a config or directory
   problem.

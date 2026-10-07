@@ -208,9 +208,11 @@ reflectance is resampled bilinearly and QA by nearest neighbor.
   past about 4. For `usgs_ard`, M2M allows one API call at a time per
   account; DataLoader queues those calls internally, while downloads still
   run in parallel.
-- **`max_attempts`**: how many times one acquisition is tried, counted
-  across re-runs. After that it stays `failed` in `items.jsonl`. Raise it
-  and re-run to try again.
+- **`max_attempts`**: how many times one acquisition is tried in total.
+  A run retries its own failures in later passes (pausing 60 s before
+  each), so transient errors usually clear within one run. Attempts are
+  counted across re-runs; after the last one, the acquisition stays
+  `failed` in `items.jsonl`. Raise it and re-run to try again.
 - **`provider_options`**: extra provider arguments, such as
   `{gee_project: ...}`. Only the option *names* are recorded in the
   manifest, never the values. Credentials belong in environment
