@@ -60,12 +60,13 @@ class FakeProvider:
     SCALE, OFFSET = 2.75e-5, -0.2
 
     def __init__(self, scenes, *, native=False, tiles=False, product_family=USGS_C2_L2,
-                 fail=None, delays=None, shared_item_id=None):
+                 fail=None, delays=None, shared_item_id=None, interrupt=()):
         self.scenes = list(scenes)
         self._identity = ProductIdentity("landsat", product_family, SCENE)
         self.fail = dict(fail or {})  # scene id -> number of times to fail (or -1 = always)
         self.delays = dict(delays or {})
         self.shared_item_id = dict(shared_item_id or {})
+        self.interrupt = set(interrupt)  # scene ids whose read raises KeyboardInterrupt
         self.last_excluded_versions = []
         self.lock = threading.Lock()
         self.active = 0
@@ -112,6 +113,9 @@ class FakeProvider:
             self.max_concurrent = max(self.max_concurrent, self.active)
         time.sleep(self.delays.get(scene.id, 0.0))
         with self.lock:
+            if scene.id in self.interrupt:
+                self.active -= 1
+                raise KeyboardInterrupt
             self.reads.append(scene.id)
             n = self.fail.get(scene.id, 0)
             if n:
@@ -169,9 +173,12 @@ def july(n, start_day=1, **kw):
 
 
 def run_with(provider, config, **kw):
+    from unittest.mock import patch
+
     from data_loader.engine import run
 
-    return run(config, provider=provider, log=lambda m: None, today=kw.pop("today", date(2026, 10, 7)), **kw)
+    with patch("data_loader.engine.RETRY_WAIT_S", 0):
+        return run(config, provider=provider, log=lambda m: None, today=kw.pop("today", date(2026, 10, 7)), **kw)
 
 
 def read_items(path) -> list[dict]:

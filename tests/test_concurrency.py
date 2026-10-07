@@ -74,7 +74,8 @@ class FailureIsolationTests(unittest.TestCase):
         self.assertFalse(summary.complete)
         self.assertEqual(rows["scene-2"]["status"], "failed")
         self.assertIn("simulated failure", rows["scene-2"]["error"])
-        self.assertEqual(rows["scene-2"]["attempts"], 1)
+        self.assertEqual(rows["scene-2"]["attempts"], 3)  # retried within the run up to max_attempts
+        self.assertEqual(p.reads.count("scene-2"), 3)
         self.assertEqual(manifest["coverage"]["counts"]["failed"], 1)
         self.assertFalse(manifest["dataset"]["complete"])
 

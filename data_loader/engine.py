@@ -52,6 +52,7 @@ from data_loader.providers import get_provider
 from data_loader.providers.base import Grid, SceneRef
 
 CATALOG_EVERY_UNITS = 200
+RETRY_WAIT_S = 60  # pause before each retry pass
 CATALOG_EVERY_S = 600
 PROGRESS_EVERY_S = 60
 
@@ -560,6 +561,10 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
     root = Path(config.output.dir)
     writer = DatasetWriter(root, config.to_dict())
     try:
+        for tmp in root.glob("*/*/*/*.tif.tmp"):  # files a killed run was writing
+            tmp.unlink()
+        for tmp in root.glob("*/*/composites/*.tif.tmp"):
+            tmp.unlink()
         plan, grid_infos = discover(config, provider, today=today, log=log)
         core = manifest_core(plan, provider, grid_infos)
         ctx = _RunContext(config=config, provider=provider, root=root, today=plan.today,
@@ -588,16 +593,17 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
         writer.write_catalog(core, complete=False)
         log(f"[run] {len(todo)} to acquire, {already} already done -> {root}")
 
-        counter = {"done": 0, "failed": 0}
+        counter = {"done": 0, "failed": 0, "attempts": 0}
         last = {"catalog": time.monotonic(), "progress": time.monotonic()}
         t_work = time.perf_counter()
 
-        def finish(u: Unit, attempts: int, row: Optional[dict], err: Optional[BaseException]):
+        def finish(u: Unit, attempts: int, row: Optional[dict], err: Optional[BaseException]) -> bool:
+            """Record one finished attempt; True if it succeeded."""
+            counter["attempts"] += 1
             if err is not None:
                 row = {**_row_base(u), "status": "failed", "attempts": attempts + 1,
                        "error": f"{type(err).__name__}: {err}"[:1000]}
-                counter["failed"] += 1
-                log(f"[run] {u.key} FAILED (attempt {attempts + 1}/{config.max_attempts}): {row['error']}")
+                log(f"[run] {u.key} FAILED (attempt {attempts + 1}/{config.max_attempts}): {row['error'][:300]}")
             else:
                 row["attempts"] = attempts + 1
                 counter["done"] += 1
@@ -605,36 +611,64 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
             now = time.monotonic()
             if now - last["progress"] >= PROGRESS_EVERY_S:
                 last["progress"] = now
-                n = counter["done"] + counter["failed"]
+                n = counter["attempts"]
                 rate = (time.perf_counter() - t_work) / n
-                log(f"[run] {n}/{len(todo)} ({counter['failed']} failed), {rate:.1f} s/unit, "
-                    f"~{rate * (len(todo) - n) / 3600:.1f} h left")
+                log(f"[run] {counter['done']}/{len(todo)} acquired ({n - counter['done']} failed attempts), "
+                    f"{rate:.1f} s/unit, ~{rate * max(len(todo) - counter['done'], 0) / 3600:.1f} h left")
             if writer.since_catalog >= CATALOG_EVERY_UNITS or now - last["catalog"] >= CATALOG_EVERY_S:
                 last["catalog"] = now
                 writer.write_catalog(core, complete=False)
+            return err is None
 
+        # Transient failures (USGS 504s, expired URLs, ...) are retried in later
+        # passes of this same run, up to max_attempts in total, so one `run`
+        # normally finishes everything that can be finished.
+        pending = list(todo)
         with ThreadPoolExecutor(max_workers=config.workers) as pool:
-            try:
-                if config.temporal_mode == "scene":
-                    futures = {pool.submit(_acquire_scene, ctx, u): (u, a) for u, a in todo}
-                    for fu in as_completed(futures):
-                        u, a = futures[fu]
-                        try:
-                            row, err = fu.result(), None
-                        except Exception as e:
-                            row, err = None, e
-                        finish(u, a, row, err)
-                else:
-                    for u, a in todo:
-                        try:
-                            row, err = _acquire_composite(ctx, u, pool), None
-                        except Exception as e:
-                            row, err = None, e
-                        finish(u, a, row, err)
-            except BaseException:
-                pool.shutdown(wait=True, cancel_futures=True)
-                writer.write_catalog(core, complete=False)
-                raise
+            for pass_no in range(config.max_attempts):
+                if not pending:
+                    break
+                if pass_no:
+                    log(f"[run] retry pass {pass_no}: {len(pending)} failed acquisition(s), "
+                        f"waiting {RETRY_WAIT_S}s first")
+                    time.sleep(RETRY_WAIT_S)
+                retry = []
+                futures: dict = {}
+                handled: set = set()
+                try:
+                    if config.temporal_mode == "scene":
+                        futures = {pool.submit(_acquire_scene, ctx, u): (u, a) for u, a in pending}
+                        for fu in as_completed(futures):
+                            u, a = futures[fu]
+                            handled.add(fu)
+                            try:
+                                row, err = fu.result(), None
+                            except Exception as e:
+                                row, err = None, e
+                            if not finish(u, a, row, err) and a + 1 < config.max_attempts:
+                                retry.append((u, a + 1))
+                    else:
+                        for u, a in pending:
+                            try:
+                                row, err = _acquire_composite(ctx, u, pool), None
+                            except Exception as e:
+                                row, err = None, e
+                            if not finish(u, a, row, err) and a + 1 < config.max_attempts:
+                                retry.append((u, a + 1))
+                except BaseException:
+                    # Interrupted: let in-flight acquisitions finish and record
+                    # them, so a resume doesn't redo work already on disk.
+                    pool.shutdown(wait=True, cancel_futures=True)
+                    for fu, (u, a) in futures.items():
+                        if fu in handled or fu.cancelled() or not fu.done():
+                            continue
+                        if fu.exception() is None:
+                            finish(u, a, fu.result(), None)
+                    writer.write_catalog(core, complete=False)
+                    raise
+                pending = sorted(retry, key=lambda ua: ua[0].key)
+        counter["failed"] = len({u.key for u, _ in todo} - {r["key"] for r in writer.rows()
+                                                             if r.get("status") == "acquired"})
 
         counts = writer.counts()
         manifest = writer.write_catalog(core, complete=counts["pending"] == 0 and counts["failed"] == 0)

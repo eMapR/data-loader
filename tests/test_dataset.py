@@ -142,23 +142,42 @@ class ResumeAndUpdateTests(unittest.TestCase):
         p = FakeProvider(july(2), fail={"scene-1": -1})
         with tempfile.TemporaryDirectory() as tmp:
             cfg = make_config(tmp, max_attempts=2)
-            run_with(p, cfg)
-            run_with(p, cfg)
-            s = run_with(p, cfg)  # third run: scene-1 has used both attempts
+            run_with(p, cfg)  # both attempts used within this run
+            s = run_with(p, cfg)
             row = {r["itemId"]: r for r in read_items(tmp)}["scene-1"]
         self.assertEqual(p.reads.count("scene-1"), 2)
         self.assertEqual((row["status"], row["attempts"]), ("failed", 2))
         self.assertEqual(s.acquired_now + s.failed_now, 0)
 
-    def test_transient_failure_succeeds_on_rerun(self):
+    def test_transient_failure_retried_within_the_same_run(self):
         p = FakeProvider(july(2), fail={"scene-1": 1})
         with tempfile.TemporaryDirectory() as tmp:
             first = run_with(p, make_config(tmp))
-            second = run_with(p, make_config(tmp))
             row = {r["itemId"]: r for r in read_items(tmp)}["scene-1"]
-        self.assertFalse(first.complete)
-        self.assertTrue(second.complete)
+        self.assertTrue(first.complete)
+        self.assertEqual((first.acquired_now, first.failed_now), (2, 0))
         self.assertEqual((row["status"], row["attempts"]), ("acquired", 2))
+
+    def test_interrupt_records_acquisitions_that_finished(self):
+        p = FakeProvider(july(4), interrupt={"scene-3"}, delays={"scene-0": 0.3})
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(KeyboardInterrupt):
+                run_with(p, make_config(tmp, workers=4))
+            rows = {r["itemId"]: r for r in read_items(tmp)}
+            on_disk = {f.name.split("_")[1] for f in Path(tmp).rglob("*.tif")}
+        acquired = {k for k, r in rows.items() if r["status"] == "acquired"}
+        self.assertIn("scene-0", acquired)  # was in flight when the interrupt arrived
+        self.assertEqual(on_disk, acquired)  # no file on disk without a record
+        self.assertEqual(rows["scene-3"]["status"], "pending")
+
+    def test_stray_tmp_files_from_a_killed_run_are_removed(self):
+        p = FakeProvider(july(1))
+        with tempfile.TemporaryDirectory() as tmp:
+            run_with(p, make_config(tmp))
+            stray = Path(tmp) / "landsat" / "aoi" / "2023" / "x_bands.tif.tmp"
+            stray.write_bytes(b"partial")
+            run_with(p, make_config(tmp))
+            self.assertFalse(stray.exists())
 
     def test_extending_the_end_date_adds_only_new_acquisitions(self):
         scenes = july(5)

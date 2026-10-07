@@ -31,6 +31,9 @@ def _cli(*argv):
 
 class CliTests(unittest.TestCase):
     def setUp(self):
+        wait = patch("data_loader.engine.RETRY_WAIT_S", 0)
+        wait.start()
+        self.addCleanup(wait.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         self.cfg = self.dir / "c.yaml"
