@@ -28,3 +28,11 @@ bench/results/
 *.egg-info/
 .venv/
 venv/
+
+# Example/run outputs (examples write to output/ and data/ by default)
+/data/
+*.tif.tmp
+
+# Meeting recordings/transcripts and other local notes -- keep out of the public repo
+*.vtt
+*.transcript*
