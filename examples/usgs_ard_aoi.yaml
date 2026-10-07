@@ -1,0 +1,26 @@
+# Landsat Collection 2 U.S. Analysis Ready Data straight from USGS, for a
+# small AOI. Needs a USGS EROS account with M2M access:
+#   export USGS_M2M_USERNAME=... USGS_M2M_TOKEN=...   (docs/getting-started.md)
+#   data-loader run examples/usgs_ard_aoi.yaml
+version: 1
+provider: usgs_ard
+sensors: [landsat]
+
+aoi:
+  upper_left: [-122.4327, 44.2860]
+  lower_right: [-122.3426, 44.2315]
+
+time:
+  start_year: 2022
+  end_year: 2023
+  season: {start: "07-01", end: "08-31"}
+
+temporal_mode: scene
+
+grid:
+  crs: EPSG:5070                       # CONUS Albers, the ARD tiles' own projection
+
+output:
+  dir: output/usgs_ard_aoi
+  bands: [blue, green, red, nir, swir1, swir2]
+  qa_band: true

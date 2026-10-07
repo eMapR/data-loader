@@ -1,0 +1,29 @@
+# One cloud-masked median composite per summer, Landsat, 2019-2023,
+# from Planetary Computer (free, no account).
+#   data-loader run examples/seasonal_composite.yaml
+version: 1
+provider: planetary_computer
+sensors: [landsat]
+
+aoi:
+  upper_left: [-122.4327, 44.2860]
+  lower_right: [-122.3426, 44.2315]
+
+time:
+  start_year: 2019
+  end_year: 2023
+  season: {start: "06-15", end: "09-15"}   # applied within every year; may wrap New Year (e.g. 11-01 to 02-28)
+
+temporal_mode: annual_composite
+reduce: median
+
+filters:
+  max_cloud_percent: 60                # skip mostly-cloudy scenes (they're listed as "filtered")
+  pixel_cloud_mask: true               # mask cloud/shadow/cirrus before compositing
+
+output:
+  dir: output/seasonal_composite
+  bands: [blue, green, red, nir, swir1, swir2]
+  indices: [nbr, ndvi]
+
+workers: 4                             # scene reads within each composite run in parallel

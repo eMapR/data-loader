@@ -1,0 +1,25 @@
+# Sentinel-2 L2A scenes at 10 m from Element 84 Earth Search (free, no account).
+#   data-loader run examples/sentinel2_scenes.yaml
+version: 1
+provider: aws_earth_search             # or planetary_computer
+sensors:
+  - name: sentinel2
+    processing_version_policy: latest  # Earth Search can list two processing versions of one acquisition
+
+aoi:
+  upper_left: [-122.4327, 44.2860]
+  lower_right: [-122.3426, 44.2315]
+
+time:
+  start_date: 2023-07-01
+  end_date: 2023-07-20
+
+temporal_mode: scene
+
+filters:
+  max_cloud_percent: 30
+
+output:
+  dir: output/sentinel2_scenes
+  bands: [blue, green, red, nir]
+  qa_band: true                        # the SCL scene-classification band

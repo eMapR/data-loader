@@ -1,0 +1,22 @@
+# Quickstart: every Landsat scene over a small AOI for one month, from
+# Microsoft Planetary Computer (free, no account needed).
+#   data-loader run examples/quickstart.yaml
+version: 1
+provider: planetary_computer
+sensors: [landsat]
+
+aoi:                                   # [lon, lat] corners, EPSG:4326
+  upper_left: [-122.4327, 44.2860]     # Oregon Cascades foothills, ~7 x 6 km
+  lower_right: [-122.3426, 44.2315]
+
+time:
+  start_date: 2023-07-01
+  end_date: 2023-07-31
+
+temporal_mode: scene                   # one output per acquisition
+
+output:
+  dir: output/quickstart
+  bands: [red, nir]                    # float32 surface reflectance, NaN nodata
+  indices: [ndvi]
+  qa_band: true                        # keep QA_PIXEL so you can mask clouds yourself

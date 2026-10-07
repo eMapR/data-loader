@@ -1,0 +1,30 @@
+# A tile archive: one USGS ARD tile, every Landsat observation, stored
+# exactly as USGS distributes it (uint16 DN + QA_PIXEL, no cloud masking,
+# no resampling). Re-run the same command to resume or to add new imagery.
+# Needs USGS_M2M_USERNAME / USGS_M2M_TOKEN (docs/getting-started.md).
+#   data-loader plan examples/usgs_ard_tile_archive.yaml     # counts only, no download
+#   data-loader run  examples/usgs_ard_tile_archive.yaml
+version: 1
+provider: usgs_ard
+sensors: [landsat]
+
+aoi:
+  tiles: [h003v004]                    # CONUS ARD grid ids; grid.crs is then "native"
+
+time:
+  start_year: 2023
+  end_year: 2023                       # omit end_year to keep the archive open-ended (through today)
+
+temporal_mode: scene
+
+filters:
+  max_cloud_percent: 100               # keep every observation...
+  pixel_cloud_mask: false              # ...and every pixel; QA_PIXEL is stored instead
+
+output:
+  dir: output/ard_h003v004
+  encoding: native                     # uint16 DN; scale/offset in the manifest and GeoTIFF tags
+  bands: [blue, green, red, nir, swir1, swir2]
+  qa_band: true
+
+workers: 4                             # M2M serializes its own calls per account; downloads overlap
