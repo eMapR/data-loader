@@ -191,6 +191,49 @@ def _s2_version_candidates(items) -> list[VersionCandidate]:
     ]
 
 
+# ESA processing baseline 04.00 (in operation from 2022-01-25) added a
+# BOA_ADD_OFFSET of -1000 DN to Sentinel-2 L2A surface reflectance:
+# reflectance = (DN - 1000) / 10000 = DN * 0.0001 - 0.1. Neither Planetary
+# Computer nor Earth Search removes it from the pixels (checked 2026-10-07:
+# open-ocean B08 on tile 10TDQ is ~DN 19 at baseline 03.00 and ~DN 1234 at
+# 05.09). Earth Search declares the offset in each asset's raster:bands;
+# Planetary Computer declares nothing, so the baseline decides.
+S2_BOA_OFFSET_BASELINE = (4, 0)
+S2_BOA_OFFSET_START = date(2022, 1, 25)
+S2_BOA_OFFSET_REFLECTANCE = -0.1
+
+
+def _baseline_tuple(baseline) -> Optional[tuple[int, int]]:
+    try:
+        major, minor = str(baseline).split(".")[:2]
+        return int(major), int(minor)
+    except (ValueError, TypeError):
+        return None
+
+
+def item_sr_scale_offset(item, spec: SensorStacSpec, asset_key: Optional[str] = None) -> tuple[float, float]:
+    """(scale, offset) that turns this item's SR DN into reflectance.
+
+    Landsat C2 L2 is constant (spec values). Sentinel-2 L2A depends on the
+    item's processing baseline (see S2_BOA_OFFSET_BASELINE): the asset's own
+    raster:bands scale/offset when the catalog declares them, else -0.1 for
+    baseline >= 04.00, else 0.0. With no baseline property at all, the
+    acquisition date decides (baseline 04.00 started 2022-01-25)."""
+    if spec.product_family != ESA_S2_L2A:
+        return spec.sr_scale, spec.sr_offset
+    if asset_key is not None and asset_key in item.assets:
+        rb = (item.assets[asset_key].extra_fields.get("raster:bands") or [{}])[0]
+        if "scale" in rb and "offset" in rb:
+            return float(rb["scale"]), float(rb["offset"])
+    baseline = _baseline_tuple(item.properties.get("s2:processing_baseline"))
+    if baseline is None:
+        d = item.datetime.date() if item.datetime else None
+        new = d is not None and d >= S2_BOA_OFFSET_START
+    else:
+        new = baseline >= S2_BOA_OFFSET_BASELINE
+    return spec.sr_scale, (S2_BOA_OFFSET_REFLECTANCE if new else spec.sr_offset)
+
+
 def _build_provenance(provider_name: str, item, spec: SensorStacSpec) -> AcquisitionProvenance:
     props = item.properties
     if spec.product_family == ESA_S2_L2A:
@@ -201,6 +244,9 @@ def _build_provenance(provider_name: str, item, spec: SensorStacSpec) -> Acquisi
             "datatake_id": props.get("s2:datatake_id"),
             "grid_code": props.get("grid:code"),
             "granule_id": props.get("s2:granule_id"),
+            # The reflectance offset this item's DN need (see
+            # item_sr_scale_offset) -- recorded because it varies by item.
+            "sr_offset": item_sr_scale_offset(item, spec, spec.band_map.get("nir"))[1],
         }
     else:  # Landsat (usgs_c2_l2)
         upstream_product_id = _extract_landsat_product_id(item)
@@ -286,7 +332,8 @@ class StacProvider:
         spec = self.config.sensors[sensor]
         return {
             "sr_scale": spec.sr_scale,
-            "sr_offset": spec.sr_offset,
+            "sr_offset": spec.sr_offset if spec.product_family != ESA_S2_L2A
+            else "per item: -0.1 for processing baseline >= 04.00, else 0.0 (see provenance extra.sr_offset)",
             "qa_policy": spec.qa_kind,
             "reflectance_resampling": "bilinear",
             "categorical_resampling": "nearest",
@@ -492,7 +539,8 @@ class StacProvider:
         out: dict[str, np.ndarray] = {}
         for b in bands:
             dn = read_asset(spec.band_map[b], Resampling.bilinear)
-            out[b] = dn_to_reflectance(dn, spec.sr_scale, spec.sr_offset)
+            scale, offset = item_sr_scale_offset(item, spec, spec.band_map[b])
+            out[b] = dn_to_reflectance(dn, scale, offset)
 
         if pixel_cloud_mask:
             qa = read_asset(spec.band_map["qa"], Resampling.nearest)
