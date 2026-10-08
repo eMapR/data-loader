@@ -158,6 +158,20 @@ class ResumeAndUpdateTests(unittest.TestCase):
         self.assertEqual((first.acquired_now, first.failed_now), (2, 0))
         self.assertEqual((row["status"], row["attempts"]), ("acquired", 2))
 
+    def test_signed_url_query_strings_never_reach_items_or_log(self):
+        url = "https://landsatlook.usgs.gov/tile/x/{id}_SR_B5.TIF?requestSignature=SECRET123"
+        p = FakeProvider(july(1), fail={"scene-0": -1}, fail_message="504 Server Error for url: " + url)
+        lines = []
+        with tempfile.TemporaryDirectory() as tmp:
+            from unittest.mock import patch
+            from data_loader.engine import run
+            with patch("data_loader.engine.RETRY_WAIT_S", 0):
+                run(make_config(tmp), provider=p, log=lines.append, today=date(2026, 10, 7))
+            items = (Path(tmp) / "items.jsonl").read_text()
+        self.assertIn("scene-0_SR_B5.TIF?<redacted>", items)
+        self.assertNotIn("SECRET123", items)
+        self.assertNotIn("SECRET123", "\n".join(lines))
+
     def test_interrupt_records_acquisitions_that_finished(self):
         p = FakeProvider(july(4), interrupt={"scene-3"}, delays={"scene-0": 0.3})
         with tempfile.TemporaryDirectory() as tmp:

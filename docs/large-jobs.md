@@ -67,8 +67,8 @@ compression): its first live run, 11 observations of one tile in
 July 2023 with 4 workers, averaged ~11 s per observation effective. The
 floor is set by USGS: the M2M one-call-at-a-time limit (~5 s per
 observation), and how fast landsatlook.usgs.gov responds (it sometimes
-returns 504s, which are retried, first per file, then in retry passes of
-the same run). Unmasked archives compress somewhat less well than masked
+returns 504s, which are retried, first per file, then in retry passes
+before the run moves on to the next tile). Unmasked archives compress somewhat less well than masked
 ones. Check free space before starting (`df -h`), and leave room to
 spare. The measurements and the Oregon estimate behind these numbers are
 in [development](development/README.md).
@@ -124,8 +124,9 @@ data-loader run my_archive.yaml
 - Acquired observations are skipped, and their files are checked against
   their recorded size.
 - Failed observations are retried, up to `max_attempts` attempts in total
-  (default 3). Within a run, failures get retry passes at the end (60 s
-  pause first), so a single `run` usually finishes everything. Attempts
+  (default 3). The run works one tile at a time, and a tile's failures
+  get retry passes (60 s pause first) before the next tile starts, so
+  each tile is finished, gaps included, as the run goes. Attempts
   carry over across runs; after the last one an observation stays
   `failed`, with the last error, in `items.jsonl`. To try again later,
   raise `max_attempts` and re-run.

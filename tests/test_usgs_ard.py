@@ -628,6 +628,36 @@ class SourceMetadataTests(unittest.TestCase):
         self.assertNotIn("requestSignature", str(record))
 
 
+class RedactUrlsTests(unittest.TestCase):
+    def test_query_strings_dropped_paths_kept(self):
+        from data_loader.providers.base import redact_urls
+        msg = ("504 Server Error: Gateway Time-out for url: https://landsatlook.usgs.gov/tile/c2/"
+               "LC09_SR_B5.TIF?requestSignature=eyJabc== and 'https://x.blob.core.windows.net/a.tif?sv=1&sig=K%2F'")
+        out = redact_urls(msg)
+        self.assertNotIn("eyJabc", out)
+        self.assertNotIn("sig=", out)
+        self.assertIn("https://landsatlook.usgs.gov/tile/c2/LC09_SR_B5.TIF?<redacted>", out)
+        self.assertIn("https://x.blob.core.windows.net/a.tif?<redacted>'", out)
+        self.assertEqual(redact_urls("no url here: a?b"), "no url here: a?b")
+
+    def test_download_failure_message_is_redacted(self):
+        import io
+        from contextlib import redirect_stdout
+
+        import requests
+        provider = UsgsArdProvider(username="u", token="t", retries=2)
+        err = requests.HTTPError("504 Server Error: Gateway Time-out for url: "
+                                 "https://landsatlook.usgs.gov/tile/a.TIF?requestSignature=SECRET",
+                                 response=MagicMock(status_code=504))
+        url = "https://landsatlook.usgs.gov/tile/a.TIF?requestSignature=SECRET"
+        with patch.object(UsgsArdProvider, "_band_url", return_value=url), \
+             patch("requests.get", side_effect=err), redirect_stdout(io.StringIO()) as out:
+            with self.assertRaises(RuntimeError) as cm:
+                provider._download_band("T", "SR_B5", ["SR_B5"])
+        self.assertNotIn("SECRET", str(cm.exception))
+        self.assertNotIn("SECRET", out.getvalue())
+
+
 class NativeTileReadTests(unittest.TestCase):
     """Full-tile reads on the native ARD grid download whole band files
     in parallel and decode them from memory, instead of /vsicurl range

@@ -28,7 +28,7 @@ from data_loader.product_contract import (
     VersionCandidate,
     select_processing_versions,
 )
-from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef
+from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef, redact_urls
 
 CANONICAL_BANDS = ("blue", "green", "red", "nir", "swir1", "swir2")
 
@@ -441,7 +441,7 @@ class StacProvider:
                 )
                 break
             except Exception as e:  # STAC endpoints can be flaky; retry with backoff
-                print(f"[{self.name}] STAC search retry {attempt + 1}/{self.retries}: {e}")
+                print(f"[{self.name}] STAC search retry {attempt + 1}/{self.retries}: {redact_urls(e)}")
                 time.sleep(2 * (attempt + 1))
         if items is None:
             raise RuntimeError(f"[{self.name}] STAC search failed after {self.retries} attempts")
@@ -564,7 +564,7 @@ class StacProvider:
                         print(
                             f"[{self.name}] {item.id}/{asset_key}: read failed "
                             f"(sign retry {sign_retries_done}/{self.max_sign_retries}), "
-                            f"looks like an expired signed URL -- re-signing and retrying: {e}"
+                            f"looks like an expired signed URL -- re-signing and retrying: {redact_urls(e)}"
                         )
                         continue
                     if (
@@ -576,7 +576,7 @@ class StacProvider:
                         print(
                             f"[{self.name}] {item.id}/{asset_key}: read failed "
                             f"(transient-network retry {transient_retries_done}/"
-                            f"{self.max_transient_retries}), retrying in {backoff_s}s: {e}"
+                            f"{self.max_transient_retries}), retrying in {backoff_s}s: {redact_urls(e)}"
                         )
                         time.sleep(backoff_s)
                         continue

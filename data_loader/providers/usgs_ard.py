@@ -98,7 +98,7 @@ from data_loader.product_contract import (
     ProductIdentity,
     parse_version_policy,
 )
-from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef
+from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef, redact_urls
 from data_loader.tiles import UsgsArdConusGrid, item_tile_id
 
 STAC_URL = "https://landsatlook.usgs.gov/stac-server"
@@ -380,7 +380,7 @@ class UsgsArdProvider:
                 )
                 break
             except Exception as e:  # LandsatLook's STAC endpoint can be flaky; retry with backoff
-                print(f"[{self.name}] STAC search retry {attempt + 1}/{self.retries}: {e}")
+                print(f"[{self.name}] STAC search retry {attempt + 1}/{self.retries}: {redact_urls(e)}")
                 time.sleep(2 * (attempt + 1))
         if items is None:
             raise RuntimeError(f"[{self.name}] STAC search failed after {self.retries} attempts")
@@ -419,7 +419,7 @@ class UsgsArdProvider:
                 ).items())
                 break
             except Exception as e:  # LandsatLook's STAC endpoint returns occasional 500s
-                print(f"[{self.name}] STAC search retry {attempt + 1}/{self.retries}: {e}")
+                print(f"[{self.name}] STAC search retry {attempt + 1}/{self.retries}: {redact_urls(e)}")
                 time.sleep(5 * (attempt + 1))
         if items is None:
             raise RuntimeError(f"[{self.name}] STAC search for tile {tile_id} failed after {self.retries} attempts")
@@ -514,7 +514,7 @@ class UsgsArdProvider:
                 with self._auth_lock:
                     self._session = None
                     self._session_born = None
-                print(f"[{self.name}] M2M {endpoint} transport retry {attempt + 1}/{self.retries}: {e}")
+                print(f"[{self.name}] M2M {endpoint} transport retry {attempt + 1}/{self.retries}: {redact_urls(e)}")
                 time.sleep(3 * (attempt + 1))
                 continue
 
@@ -667,7 +667,7 @@ class UsgsArdProvider:
                     if attempt == 0 and _looks_like_expired_auth(e):
                         print(
                             f"[{self.name}] {tile_product_id}/{suffix}: read failed, "
-                            f"looks like an expired signed URL -- re-minting and retrying: {e}"
+                            f"looks like an expired signed URL -- re-minting and retrying: {redact_urls(e)}"
                         )
                         continue
                     raise
@@ -742,8 +742,8 @@ class UsgsArdProvider:
             if attempt >= self.retries:
                 raise RuntimeError(
                     f"[{self.name}] {tile_product_id}/{suffix}: download failed after "
-                    f"{attempt} attempts: {err}") from err
-            print(f"[{self.name}] {tile_product_id}/{suffix} transport retry {attempt}/{self.retries}: {err}")
+                    f"{attempt} attempts: {redact_urls(err)}") from err
+            print(f"[{self.name}] {tile_product_id}/{suffix} transport retry {attempt}/{self.retries}: {redact_urls(err)}")
             time.sleep(2 ** attempt)
 
     def _read_native_tile(self, tile_product_id: str, needed: list[str], grid: Grid,

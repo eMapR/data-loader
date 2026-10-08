@@ -71,8 +71,8 @@ see.
 **Lots of `transport retry ... 504 Server Error: Gateway Time-out` lines**
 : landsatlook.usgs.gov is slow or overloaded. These are retried with
   backoff, and an observation is marked failed only after repeated
-  failures. Failed observations get retry passes later in the same run (up to
-  `max_attempts` in total). Persistent
+  failures. Failed observations get retry passes before the run moves on
+  to the next tile (up to `max_attempts` in total). Persistent
   504s for hours usually mean a USGS outage; stop and resume later.
 
 **`STAC search retry ... Internal server error`**

@@ -21,6 +21,7 @@ Optional capabilities, detected by attribute:
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Optional, Protocol
@@ -28,6 +29,16 @@ from typing import Any, Optional, Protocol
 from rasterio.transform import Affine
 
 from data_loader.product_contract import AcquisitionProvenance, ProductIdentity
+
+_URL_QUERY_RE = re.compile(r"(https?://[^\s?#'\"<>]+)\?[^\s'\"<>]*")
+
+
+def redact_urls(text) -> str:
+    """`text` with the query string of every URL replaced by `?<redacted>`.
+    Signed download URLs carry credentials there (USGS `requestSignature`,
+    Planetary Computer SAS tokens); the path still names the file. Use on
+    any message that may quote a URL before it reaches a log or an output."""
+    return _URL_QUERY_RE.sub(r"\1?<redacted>", str(text))
 
 
 @dataclass(frozen=True)

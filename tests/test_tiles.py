@@ -126,6 +126,20 @@ class TileRunTests(unittest.TestCase):
         self.assertIn("none", m["processing"]["resampling"])
         self.assertEqual(p.search_calls[0][0], "h003v004")
 
+    def test_failures_retried_before_the_next_tile_starts(self):
+        p = FakeProvider(july(2), native=True, tiles=True, fail={"scene-1": 1})
+        p.tile_grid = _SmallGrid()
+        with tempfile.TemporaryDirectory() as tmp:
+            s = run_with(p, make_config(tmp, aoi={**TILES_AOI, "tiles": ["h003v004", "h003v005"]},
+                                        grid={"resolution_m": None}, workers=1,
+                                        output={"encoding": "native", "bands": ["red"], "qa_band": True}))
+            rows = {r["key"]: r for r in read_items(tmp)}
+        self.assertTrue(s.complete)
+        # h003v004: scene-0, scene-1 (fails), scene-1 again; only then h003v005
+        self.assertEqual(p.reads, ["scene-0", "scene-1", "scene-1", "scene-0", "scene-1"])
+        self.assertEqual(rows["landsat/h003v004/scene-1"]["attempts"], 2)
+        self.assertEqual(rows["landsat/h003v005/scene-1"]["attempts"], 1)
+
     def test_tiles_need_a_provider_with_a_tile_grid(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(ConfigError, "has no tile grid"):
