@@ -1,0 +1,1161 @@
+{
+ "source": "Planetary Computer sentinel-2-l2a search, bbox [-123.05, 44.0, -122.95, 44.1], fetched 2026-10-15; assets and links removed",
+ "features": [
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2A_MSIL2A_20190715T190921_R056_T10TEP_20201005T142502",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.764084,
+       44.2519965
+      ],
+      [
+       -122.7789,
+       44.2153369
+      ],
+      [
+       -122.83685,
+       44.0693726
+      ],
+      [
+       -122.895294,
+       43.9236084
+      ],
+      [
+       -122.95303,
+       43.77778
+      ],
+      [
+       -123.000244,
+       43.6608257
+      ],
+      [
+       -123.000244,
+       44.2534176
+      ],
+      [
+       -122.764084,
+       44.2519965
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.000244,
+    43.6608257,
+    -122.764084,
+    44.2534176
+   ],
+   "properties": {
+    "datetime": "2019-07-15T19:09:21.024000Z",
+    "platform": "Sentinel-2A",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TEP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_ESRI_20201005T142505_A021217_T10TEP_N02.12",
+    "eo:cloud_cover": 94.249404,
+    "s2:datatake_id": "GS2A_20190715T190921_021217_N02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190715T190921_N0212_R056_T10TEP_20201005T142502.SAFE",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_ESRI_20201005T142505_S20190715T191504_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T14:25:02.954Z",
+    "sat:relative_orbit": 56,
+    "s2:water_percentage": 0.022171,
+    "s2:mean_solar_zenith": 24.8355388360934,
+    "s2:mean_solar_azimuth": 149.595661460438,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 0.958946,
+    "s2:vegetation_percentage": 1.070636,
+    "s2:thin_cirrus_percentage": 0.007433,
+    "s2:cloud_shadow_percentage": 0.000256,
+    "s2:nodata_pixel_percentage": 94.822288,
+    "s2:unclassified_percentage": 3.142125,
+    "s2:dark_features_percentage": 0.003076,
+    "s2:not_vegetated_percentage": 0.553388,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 86.046237,
+    "s2:reflectance_conversion_factor": 0.967581812444462,
+    "s2:medium_proba_clouds_percentage": 8.195734,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2A_MSIL2A_20190715T190921_R056_T10TDP_20201005T142511",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.87833,
+       43.9659386
+      ],
+      [
+       -122.895294,
+       43.9236084
+      ],
+      [
+       -122.95303,
+       43.77778
+      ],
+      [
+       -123.01172,
+       43.632395
+      ],
+      [
+       -123.0676,
+       43.4864418
+      ],
+      [
+       -123.124344,
+       43.3407992
+      ],
+      [
+       -123.154495,
+       43.2633914
+      ],
+      [
+       -124.23253,
+       43.25815
+      ],
+      [
+       -124.252975,
+       44.2465454
+      ],
+      [
+       -122.87775,
+       44.2533522
+      ],
+      [
+       -122.87833,
+       43.9659386
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.252975,
+    43.25815,
+    -122.87775,
+    44.2533522
+   ],
+   "properties": {
+    "datetime": "2019-07-15T19:09:21.024000Z",
+    "platform": "Sentinel-2A",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TDP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_ESRI_20201005T142513_A021217_T10TDP_N02.12",
+    "eo:cloud_cover": 87.331507,
+    "s2:datatake_id": "GS2A_20190715T190921_021217_N02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190715T190921_N0212_R056_T10TDP_20201005T142511.SAFE",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_ESRI_20201005T142513_S20190715T191504_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T14:25:11.735Z",
+    "sat:relative_orbit": 56,
+    "s2:water_percentage": 1.687522,
+    "s2:mean_solar_zenith": 25.301394485576,
+    "s2:mean_solar_azimuth": 147.13235961439,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 0.056829,
+    "s2:vegetation_percentage": 4.355558,
+    "s2:thin_cirrus_percentage": 0.025461,
+    "s2:cloud_shadow_percentage": 0.123322,
+    "s2:nodata_pixel_percentage": 7.205729,
+    "s2:unclassified_percentage": 4.483543,
+    "s2:dark_features_percentage": 0.030374,
+    "s2:not_vegetated_percentage": 1.931345,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 78.436285,
+    "s2:reflectance_conversion_factor": 0.967581812444462,
+    "s2:medium_proba_clouds_percentage": 8.86976,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2A_MSIL2A_20190712T185921_R013_T10TEP_20201005T125733",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.000244,
+       44.2534176
+      ],
+      [
+       -121.62506,
+       44.2451424
+      ],
+      [
+       -121.64751,
+       43.2567943
+      ],
+      [
+       -123.000244,
+       43.2647904
+      ],
+      [
+       -123.000244,
+       44.2534176
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.000244,
+    43.2567943,
+    -121.62506,
+    44.2534176
+   ],
+   "properties": {
+    "datetime": "2019-07-12T18:59:21.024000Z",
+    "platform": "Sentinel-2A",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TEP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_ESRI_20201005T125735_A021174_T10TEP_N02.12",
+    "eo:cloud_cover": 4.113651,
+    "s2:datatake_id": "GS2A_20190712T185921_021174_N02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190712T185921_N0212_R013_T10TEP_20201005T125733.SAFE",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_ESRI_20201005T125735_S20190712T190609_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T12:57:33.958Z",
+    "sat:relative_orbit": 13,
+    "s2:water_percentage": 1.344651,
+    "s2:mean_solar_zenith": 25.3735017420048,
+    "s2:mean_solar_azimuth": 144.369177504238,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 0.745598,
+    "s2:vegetation_percentage": 82.562578,
+    "s2:thin_cirrus_percentage": 0.080265,
+    "s2:cloud_shadow_percentage": 1.60742,
+    "s2:nodata_pixel_percentage": 3.3e-05,
+    "s2:unclassified_percentage": 1.179064,
+    "s2:dark_features_percentage": 1.293543,
+    "s2:not_vegetated_percentage": 7.153489,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 3.058611,
+    "s2:reflectance_conversion_factor": 0.96743071124093,
+    "s2:medium_proba_clouds_percentage": 0.974775,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2A_MSIL2A_20190712T185921_R013_T10TDP_20201005T125733",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.24194,
+       43.7131161
+      ],
+      [
+       -124.20914,
+       43.8129724
+      ],
+      [
+       -124.16072,
+       43.9598546
+      ],
+      [
+       -124.111755,
+       44.1065878
+      ],
+      [
+       -124.06415,
+       44.2474801
+      ],
+      [
+       -122.87775,
+       44.2533522
+      ],
+      [
+       -122.879745,
+       43.2647272
+      ],
+      [
+       -124.23253,
+       43.25815
+      ],
+      [
+       -124.24194,
+       43.7131161
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.24194,
+    43.25815,
+    -122.87775,
+    44.2533522
+   ],
+   "properties": {
+    "datetime": "2019-07-12T18:59:21.024000Z",
+    "platform": "Sentinel-2A",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TDP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_ESRI_20201005T125735_A021174_T10TDP_N02.12",
+    "eo:cloud_cover": 33.689716,
+    "s2:datatake_id": "GS2A_20190712T185921_021174_N02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190712T185921_N0212_R013_T10TDP_20201005T125733.SAFE",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_ESRI_20201005T125735_S20190712T190609_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T12:57:33.330Z",
+    "sat:relative_orbit": 13,
+    "s2:water_percentage": 0.288277,
+    "s2:mean_solar_zenith": 25.9061158398601,
+    "s2:mean_solar_azimuth": 142.037332869941,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 3e-06,
+    "s2:vegetation_percentage": 53.349406,
+    "s2:thin_cirrus_percentage": 9.304984,
+    "s2:cloud_shadow_percentage": 0.383564,
+    "s2:nodata_pixel_percentage": 3.6888,
+    "s2:unclassified_percentage": 5.012448,
+    "s2:dark_features_percentage": 0.241616,
+    "s2:not_vegetated_percentage": 7.034968,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 17.43691,
+    "s2:reflectance_conversion_factor": 0.96743071124093,
+    "s2:medium_proba_clouds_percentage": 6.947822,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2B_MSIL2A_20190710T190919_R056_T10TEP_20201005T121415",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.76526,
+       44.2520035
+      ],
+      [
+       -122.823,
+       44.1080072
+      ],
+      [
+       -122.88101,
+       43.9621924
+      ],
+      [
+       -122.93997,
+       43.8166664
+      ],
+      [
+       -122.99785,
+       43.6709569
+      ],
+      [
+       -123.000244,
+       43.6648131
+      ],
+      [
+       -123.000244,
+       44.2534176
+      ],
+      [
+       -122.76526,
+       44.2520035
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.000244,
+    43.6648131,
+    -122.76526,
+    44.2534176
+   ],
+   "properties": {
+    "datetime": "2019-07-10T19:09:19.024000Z",
+    "platform": "Sentinel-2B",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TEP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_ESRI_20201005T121420_A012237_T10TEP_N02.12",
+    "eo:cloud_cover": 66.670085,
+    "s2:datatake_id": "GS2B_20190710T190919_012237_N02.12",
+    "s2:product_uri": "S2B_MSIL2A_20190710T190919_N0212_R056_T10TEP_20201005T121415.SAFE",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_ESRI_20201005T121420_S20190710T191733_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T12:14:15.821Z",
+    "sat:relative_orbit": 56,
+    "s2:water_percentage": 0.068144,
+    "s2:mean_solar_zenith": 24.1142632364389,
+    "s2:mean_solar_azimuth": 149.243493717606,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 0.032904,
+    "s2:vegetation_percentage": 19.47867,
+    "s2:thin_cirrus_percentage": 11.345381,
+    "s2:cloud_shadow_percentage": 0.567214,
+    "s2:nodata_pixel_percentage": 94.887662,
+    "s2:unclassified_percentage": 8.938291,
+    "s2:dark_features_percentage": 0.234868,
+    "s2:not_vegetated_percentage": 4.009826,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 40.144271,
+    "s2:reflectance_conversion_factor": 0.967377376190035,
+    "s2:medium_proba_clouds_percentage": 15.180434,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2B_MSIL2A_20190710T190919_R056_T10TDP_20201005T121426",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.87831,
+       43.9689477
+      ],
+      [
+       -122.88101,
+       43.9621924
+      ],
+      [
+       -122.93997,
+       43.8166664
+      ],
+      [
+       -122.99785,
+       43.6709569
+      ],
+      [
+       -123.05484,
+       43.5251432
+      ],
+      [
+       -123.11156,
+       43.3793466
+      ],
+      [
+       -123.15643,
+       43.2633819
+      ],
+      [
+       -124.23253,
+       43.25815
+      ],
+      [
+       -124.252975,
+       44.2465454
+      ],
+      [
+       -122.87775,
+       44.2533522
+      ],
+      [
+       -122.87831,
+       43.9689477
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.252975,
+    43.25815,
+    -122.87775,
+    44.2533522
+   ],
+   "properties": {
+    "datetime": "2019-07-10T19:09:19.024000Z",
+    "platform": "Sentinel-2B",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TDP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_ESRI_20201005T121427_A012237_T10TDP_N02.12",
+    "eo:cloud_cover": 86.304578,
+    "s2:datatake_id": "GS2B_20190710T190919_012237_N02.12",
+    "s2:product_uri": "S2B_MSIL2A_20190710T190919_N0212_R056_T10TDP_20201005T121426.SAFE",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_ESRI_20201005T121427_S20190710T191733_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T12:14:26.353Z",
+    "sat:relative_orbit": 56,
+    "s2:water_percentage": 0.042358,
+    "s2:mean_solar_zenith": 24.585055105371,
+    "s2:mean_solar_azimuth": 146.732783882714,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 2.739557,
+    "s2:vegetation_percentage": 5.402431,
+    "s2:thin_cirrus_percentage": 1.349093,
+    "s2:cloud_shadow_percentage": 0.111236,
+    "s2:nodata_pixel_percentage": 7.291362,
+    "s2:unclassified_percentage": 3.891255,
+    "s2:dark_features_percentage": 0.06265,
+    "s2:not_vegetated_percentage": 1.445935,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 78.149259,
+    "s2:reflectance_conversion_factor": 0.967377376190035,
+    "s2:medium_proba_clouds_percentage": 6.806226,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2B_MSIL2A_20190707T185929_R013_T10TEP_20201005T104950",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.000244,
+       44.2534176
+      ],
+      [
+       -121.62506,
+       44.2451424
+      ],
+      [
+       -121.64751,
+       43.2567943
+      ],
+      [
+       -123.000244,
+       43.2647904
+      ],
+      [
+       -123.000244,
+       44.2534176
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.000244,
+    43.2567943,
+    -121.62506,
+    44.2534176
+   ],
+   "properties": {
+    "datetime": "2019-07-07T18:59:29.024000Z",
+    "platform": "Sentinel-2B",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TEP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_ESRI_20201005T104951_A012194_T10TEP_N02.12",
+    "eo:cloud_cover": 5.042419,
+    "s2:datatake_id": "GS2B_20190707T185929_012194_N02.12",
+    "s2:product_uri": "S2B_MSIL2A_20190707T185929_N0212_R013_T10TEP_20201005T104950.SAFE",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_ESRI_20201005T104951_S20190707T190830_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T10:49:50.631Z",
+    "sat:relative_orbit": 13,
+    "s2:water_percentage": 1.368678,
+    "s2:mean_solar_zenith": 24.7356856664102,
+    "s2:mean_solar_azimuth": 144.07016984949,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 0.940325,
+    "s2:vegetation_percentage": 81.527686,
+    "s2:thin_cirrus_percentage": 0.064117,
+    "s2:cloud_shadow_percentage": 0.744437,
+    "s2:nodata_pixel_percentage": 7e-06,
+    "s2:unclassified_percentage": 1.680323,
+    "s2:dark_features_percentage": 0.670174,
+    "s2:not_vegetated_percentage": 8.025956,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 3.288822,
+    "s2:reflectance_conversion_factor": 0.967367678999038,
+    "s2:medium_proba_clouds_percentage": 1.68948,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2B_MSIL2A_20190707T185929_R013_T10TDP_20201005T104946",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.24214,
+       43.7226792
+      ],
+      [
+       -124.20534,
+       43.8346672
+      ],
+      [
+       -124.15698,
+       43.9814791
+      ],
+      [
+       -124.10834,
+       44.1281806
+      ],
+      [
+       -124.06822,
+       44.2474599
+      ],
+      [
+       -122.87775,
+       44.2533522
+      ],
+      [
+       -122.879745,
+       43.2647272
+      ],
+      [
+       -124.23253,
+       43.25815
+      ],
+      [
+       -124.24214,
+       43.7226792
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.24214,
+    43.25815,
+    -122.87775,
+    44.2533522
+   ],
+   "properties": {
+    "datetime": "2019-07-07T18:59:29.024000Z",
+    "platform": "Sentinel-2B",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TDP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_ESRI_20201005T104947_A012194_T10TDP_N02.12",
+    "eo:cloud_cover": 5.86016,
+    "s2:datatake_id": "GS2B_20190707T185929_012194_N02.12",
+    "s2:product_uri": "S2B_MSIL2A_20190707T185929_N0212_R013_T10TDP_20201005T104946.SAFE",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_ESRI_20201005T104947_S20190707T190830_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T10:49:46.769Z",
+    "sat:relative_orbit": 13,
+    "s2:water_percentage": 2.323071,
+    "s2:mean_solar_zenith": 25.2722182865544,
+    "s2:mean_solar_azimuth": 141.701574046602,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 0.0,
+    "s2:vegetation_percentage": 80.708987,
+    "s2:thin_cirrus_percentage": 0.013485,
+    "s2:cloud_shadow_percentage": 0.65118,
+    "s2:nodata_pixel_percentage": 3.554527,
+    "s2:unclassified_percentage": 2.075561,
+    "s2:dark_features_percentage": 0.371533,
+    "s2:not_vegetated_percentage": 8.009505,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 3.950202,
+    "s2:reflectance_conversion_factor": 0.967367678999038,
+    "s2:medium_proba_clouds_percentage": 1.896472,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2A_MSIL2A_20190705T190921_R056_T10TEP_20201005T093820",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.76337,
+       44.2519921
+      ],
+      [
+       -122.77542,
+       44.222201
+      ],
+      [
+       -122.833084,
+       44.0763651
+      ],
+      [
+       -122.89128,
+       43.9306585
+      ],
+      [
+       -122.94893,
+       43.7848072
+      ],
+      [
+       -123.000244,
+       43.6589636
+      ],
+      [
+       -123.000244,
+       44.2534176
+      ],
+      [
+       -122.76337,
+       44.2519921
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.000244,
+    43.6589636,
+    -122.76337,
+    44.2534176
+   ],
+   "properties": {
+    "datetime": "2019-07-05T19:09:21.024000Z",
+    "platform": "Sentinel-2A",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TEP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_ESRI_20201005T093822_A021074_T10TEP_N02.12",
+    "eo:cloud_cover": 92.08528,
+    "s2:datatake_id": "GS2A_20190705T190921_021074_N02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190705T190921_N0212_R056_T10TEP_20201005T093820.SAFE",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_ESRI_20201005T093822_S20190705T191341_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T09:38:20.699Z",
+    "sat:relative_orbit": 56,
+    "s2:water_percentage": 0.0,
+    "s2:mean_solar_zenith": 23.533608809337,
+    "s2:mean_solar_azimuth": 149.062915061439,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 0.0,
+    "s2:vegetation_percentage": 3.483554,
+    "s2:thin_cirrus_percentage": 0.010786,
+    "s2:cloud_shadow_percentage": 0.103486,
+    "s2:nodata_pixel_percentage": 94.770873,
+    "s2:unclassified_percentage": 3.915135,
+    "s2:dark_features_percentage": 0.00203,
+    "s2:not_vegetated_percentage": 0.410517,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 85.710472,
+    "s2:reflectance_conversion_factor": 0.967408169971489,
+    "s2:medium_proba_clouds_percentage": 6.364022,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2A_MSIL2A_20190705T190921_R056_T10TDP_20201005T093832",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.87833,
+       43.9630794
+      ],
+      [
+       -122.89128,
+       43.9306585
+      ],
+      [
+       -122.94893,
+       43.7848072
+      ],
+      [
+       -123.00824,
+       43.6393622
+      ],
+      [
+       -123.06419,
+       43.4930757
+      ],
+      [
+       -123.12126,
+       43.3471137
+      ],
+      [
+       -123.1539,
+       43.2633942
+      ],
+      [
+       -124.23253,
+       43.25815
+      ],
+      [
+       -124.252975,
+       44.2465454
+      ],
+      [
+       -122.87775,
+       44.2533522
+      ],
+      [
+       -122.87833,
+       43.9630794
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.252975,
+    43.25815,
+    -122.87775,
+    44.2533522
+   ],
+   "properties": {
+    "datetime": "2019-07-05T19:09:21.024000Z",
+    "platform": "Sentinel-2A",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TDP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_ESRI_20201005T093834_A021074_T10TDP_N02.12",
+    "eo:cloud_cover": 69.200502,
+    "s2:datatake_id": "GS2A_20190705T190921_021074_N02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190705T190921_N0212_R056_T10TDP_20201005T093832.SAFE",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_ESRI_20201005T093834_S20190705T191341_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T09:38:32.230Z",
+    "sat:relative_orbit": 56,
+    "s2:water_percentage": 3.970777,
+    "s2:mean_solar_zenith": 24.0070553822571,
+    "s2:mean_solar_azimuth": 146.510153280477,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 7e-06,
+    "s2:vegetation_percentage": 17.110805,
+    "s2:thin_cirrus_percentage": 0.324938,
+    "s2:cloud_shadow_percentage": 0.242226,
+    "s2:nodata_pixel_percentage": 7.154286,
+    "s2:unclassified_percentage": 5.666316,
+    "s2:dark_features_percentage": 0.118483,
+    "s2:not_vegetated_percentage": 3.690876,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 60.79489,
+    "s2:reflectance_conversion_factor": 0.967408169971489,
+    "s2:medium_proba_clouds_percentage": 8.080674,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2A_MSIL2A_20190702T185921_R013_T10TEP_20201005T081330",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.000244,
+       44.2534176
+      ],
+      [
+       -121.62506,
+       44.2451424
+      ],
+      [
+       -121.64751,
+       43.2567943
+      ],
+      [
+       -123.000244,
+       43.2647904
+      ],
+      [
+       -123.000244,
+       44.2534176
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.000244,
+    43.2567943,
+    -121.62506,
+    44.2534176
+   ],
+   "properties": {
+    "datetime": "2019-07-02T18:59:21.024000Z",
+    "platform": "Sentinel-2A",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TEP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_ESRI_20201005T081332_A021031_T10TEP_N02.12",
+    "eo:cloud_cover": 61.744844,
+    "s2:datatake_id": "GS2A_20190702T185921_021031_N02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190702T185921_N0212_R013_T10TEP_20201005T081330.SAFE",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_ESRI_20201005T081332_S20190702T190417_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T08:13:30.311Z",
+    "sat:relative_orbit": 13,
+    "s2:water_percentage": 0.883395,
+    "s2:mean_solar_zenith": 24.2387268836097,
+    "s2:mean_solar_azimuth": 143.956810371485,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 1.04998,
+    "s2:vegetation_percentage": 23.007029,
+    "s2:thin_cirrus_percentage": 0.128978,
+    "s2:cloud_shadow_percentage": 2.059964,
+    "s2:nodata_pixel_percentage": 7e-06,
+    "s2:unclassified_percentage": 5.273526,
+    "s2:dark_features_percentage": 1.396943,
+    "s2:not_vegetated_percentage": 4.584321,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 55.45519,
+    "s2:reflectance_conversion_factor": 0.967539939098264,
+    "s2:medium_proba_clouds_percentage": 6.160677,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/sat/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2A_MSIL2A_20190702T185921_R013_T10TDP_20201005T081326",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.241776,
+       43.7054493
+      ],
+      [
+       -124.22984,
+       43.7419119
+      ],
+      [
+       -124.18169,
+       43.8886627
+      ],
+      [
+       -124.133316,
+       44.0353742
+      ],
+      [
+       -124.083954,
+       44.1819039
+      ],
+      [
+       -124.062,
+       44.2474908
+      ],
+      [
+       -122.87775,
+       44.2533522
+      ],
+      [
+       -122.879745,
+       43.2647272
+      ],
+      [
+       -124.23253,
+       43.25815
+      ],
+      [
+       -124.241776,
+       43.7054493
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.241776,
+    43.25815,
+    -122.87775,
+    44.2533522
+   ],
+   "properties": {
+    "datetime": "2019-07-02T18:59:21.024000Z",
+    "platform": "Sentinel-2A",
+    "proj:epsg": 32610,
+    "instruments": [
+     "msi"
+    ],
+    "s2:mgrs_tile": "10TDP",
+    "constellation": "Sentinel 2",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_ESRI_20201005T081328_A021031_T10TDP_N02.12",
+    "eo:cloud_cover": 94.463794,
+    "s2:datatake_id": "GS2A_20190702T185921_021031_N02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190702T185921_N0212_R013_T10TDP_20201005T081326.SAFE",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_ESRI_20201005T081328_S20190702T190417_N02.12",
+    "s2:product_type": "S2MSI2A",
+    "sat:orbit_state": "descending",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:generation_time": "2020-10-05T08:13:26.704Z",
+    "sat:relative_orbit": 13,
+    "s2:water_percentage": 0.79126,
+    "s2:mean_solar_zenith": 24.776866180478,
+    "s2:mean_solar_azimuth": 141.555867779246,
+    "s2:processing_baseline": "02.12",
+    "s2:snow_ice_percentage": 0.130308,
+    "s2:vegetation_percentage": 1.692804,
+    "s2:thin_cirrus_percentage": 0.126263,
+    "s2:cloud_shadow_percentage": 0.08331,
+    "s2:nodata_pixel_percentage": 3.786219,
+    "s2:unclassified_percentage": 2.297833,
+    "s2:dark_features_percentage": 0.026032,
+    "s2:not_vegetated_percentage": 0.514657,
+    "s2:degraded_msi_data_percentage": 0.0,
+    "s2:high_proba_clouds_percentage": 88.96876,
+    "s2:reflectance_conversion_factor": 0.967539939098264,
+    "s2:medium_proba_clouds_percentage": 5.368771,
+    "s2:saturated_defective_pixel_percentage": 0.0
+   },
+   "assets": {},
+   "links": []
+  }
+ ]
+}

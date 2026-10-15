@@ -1,0 +1,2381 @@
+{
+ "source": "Earth Search v1 sentinel-2-l2a search, bbox [-123.05, 44.0, -122.95, 44.1], fetched 2026-10-15; assets and links removed",
+ "features": [
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json"
+   ],
+   "id": "S2A_10TDP_20190715_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ],
+      [
+       -124.23253142659583,
+       43.259059411540235
+      ],
+      [
+       -123.15476001875528,
+       43.2661347054189
+      ],
+      [
+       -123.01013083463359,
+       43.64214354160575
+      ],
+      [
+       -122.87834147239819,
+       43.968643662464665
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.2529690327714,
+    43.259059411540235,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2024-09-03T20:27:43.130Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 89.601797,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 147.133730417085,
+    "view:sun_elevation": 64.69897769631,
+    "s2:degraded_msi_data_percentage": 0.0239,
+    "s2:nodata_pixel_percentage": 7.230158,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.006506,
+    "s2:cloud_shadow_percentage": 1.153449,
+    "s2:vegetation_percentage": 3.165396,
+    "s2:not_vegetated_percentage": 1.512443,
+    "s2:water_percentage": 1.674204,
+    "s2:unclassified_percentage": 2.886106,
+    "s2:medium_proba_clouds_percentage": 11.044414,
+    "s2:high_proba_clouds_percentage": 78.499573,
+    "s2:thin_cirrus_percentage": 0.057809,
+    "s2:snow_ice_percentage": 9.7e-05,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2A_MSIL2A_20190715T190921_N0500_R056_T10TDP_20230530T211130.SAFE",
+    "s2:generation_time": "2023-05-30T21:11:30.000000Z",
+    "s2:datatake_id": "GS2A_20190715T190921_021217_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_S2RP_20230530T211130_S20190715T191504_N05.00",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_S2RP_20230530T211130_A021217_T10TDP_N05.00",
+    "s2:reflectance_conversion_factor": 0.967581812444462,
+    "datetime": "2019-07-15T19:22:29.574000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2A_10TDP_20190715_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/a16df340c77e29e0a1ffbb03f2d05232",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-03T20:27:43.130Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json"
+   ],
+   "id": "S2A_10TDP_20190715_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -122.87834275059683,
+       43.968017428260886
+      ],
+      [
+       -123.00988283516928,
+       43.64169323967634
+      ],
+      [
+       -123.15494100224839,
+       43.26469445111508
+      ],
+      [
+       -124.23251326535858,
+       43.25815914568143
+      ],
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.2529690327714,
+    43.25815914568143,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2022-11-08T05:47:48.098Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 87.33151,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 147.13235961439,
+    "view:sun_elevation": 64.698605514424,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 7.205729,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.030302,
+    "s2:cloud_shadow_percentage": 0.123322,
+    "s2:vegetation_percentage": 4.355558,
+    "s2:not_vegetated_percentage": 1.931345,
+    "s2:water_percentage": 1.687611,
+    "s2:unclassified_percentage": 4.483543,
+    "s2:medium_proba_clouds_percentage": 8.869764,
+    "s2:high_proba_clouds_percentage": 78.436285,
+    "s2:thin_cirrus_percentage": 0.025461,
+    "s2:snow_ice_percentage": 0.056807,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.13",
+    "s2:product_uri": "S2A_MSIL2A_20190715T190921_N0213_R056_T10TDP_20190715T232723.SAFE",
+    "s2:generation_time": "2019-07-15T23:27:23.000000Z",
+    "s2:datatake_id": "GS2A_20190715T190921_021217_N02.13",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_SGS__20190715T232723_S20190715T191504_N02.13",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_SGS__20190715T232723_A021217_T10TDP_N02.13",
+    "s2:reflectance_conversion_factor": 0.967581812444462,
+    "datetime": "2019-07-15T19:22:29.574000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2A_10TDP_20190715_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/52eee0341cc702a62e0316eeeecf9f10",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T05:47:48.098Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json"
+   ],
+   "id": "S2A_10TEP_20190715_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.99898536842521,
+       44.25340857327628
+      ],
+      [
+       -122.76469930030835,
+       44.25316624257757
+      ],
+      [
+       -122.99887260099601,
+       43.66779534364959
+      ],
+      [
+       -122.99898536842521,
+       44.25340857327628
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -122.99898536842521,
+    43.66779534364959,
+    -122.76469930030835,
+    44.25340857327628
+   ],
+   "properties": {
+    "created": "2022-11-03T20:01:56.873Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 94.249404,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 149.595661460438,
+    "view:sun_elevation": 65.1644611639066,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 94.822288,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.003076,
+    "s2:cloud_shadow_percentage": 0.000256,
+    "s2:vegetation_percentage": 1.070636,
+    "s2:not_vegetated_percentage": 0.553388,
+    "s2:water_percentage": 0.022171,
+    "s2:unclassified_percentage": 3.142125,
+    "s2:medium_proba_clouds_percentage": 8.195734,
+    "s2:high_proba_clouds_percentage": 86.046237,
+    "s2:thin_cirrus_percentage": 0.007433,
+    "s2:snow_ice_percentage": 0.958946,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.13",
+    "s2:product_uri": "S2A_MSIL2A_20190715T190921_N0213_R056_T10TEP_20190715T232723.SAFE",
+    "s2:generation_time": "2019-07-15T23:27:23.000000Z",
+    "s2:datatake_id": "GS2A_20190715T190921_021217_N02.13",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_SGS__20190715T232723_S20190715T191504_N02.13",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_SGS__20190715T232723_A021217_T10TEP_N02.13",
+    "s2:reflectance_conversion_factor": 0.967581812444462,
+    "datetime": "2019-07-15T19:22:21.744000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2A_10TEP_20190715_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/182e84fbe1473d05aa7ae841b4dbb89e",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T13:27:26.429Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json"
+   ],
+   "id": "S2A_10TEP_20190715_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ],
+      [
+       -123.00023566731087,
+       43.66627824784625
+      ],
+      [
+       -122.76482484756751,
+       44.253166501110485
+      ],
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.0002379995488,
+    43.66627824784625,
+    -122.76482484756751,
+    44.253408577534294
+   ],
+   "properties": {
+    "created": "2024-09-03T20:11:32.884Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 95.992392,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 149.597082263464,
+    "view:sun_elevation": 65.1648148097364,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 94.838387,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0,
+    "s2:cloud_shadow_percentage": 2.759178,
+    "s2:vegetation_percentage": 0.459402,
+    "s2:not_vegetated_percentage": 0.197979,
+    "s2:water_percentage": 0.007071,
+    "s2:unclassified_percentage": 0.583975,
+    "s2:medium_proba_clouds_percentage": 9.795355,
+    "s2:high_proba_clouds_percentage": 86.142725,
+    "s2:thin_cirrus_percentage": 0.054316,
+    "s2:snow_ice_percentage": 0,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2A_MSIL2A_20190715T190921_N0500_R056_T10TEP_20230530T211130.SAFE",
+    "s2:generation_time": "2023-05-30T21:11:30.000000Z",
+    "s2:datatake_id": "GS2A_20190715T190921_021217_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_S2RP_20230530T211130_S20190715T191504_N05.00",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_S2RP_20230530T211130_A021217_T10TEP_N05.00",
+    "s2:reflectance_conversion_factor": 0.967581812444462,
+    "datetime": "2019-07-15T19:22:21.736000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2A_10TEP_20190715_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/1bd2d52c6d9fcb5955c0f2256924f2f2",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-03T20:11:32.884Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json"
+   ],
+   "id": "S2A_10TDP_20190712_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.06083671579891,
+       44.24848262699278
+      ],
+      [
+       -124.24165383033673,
+       43.706064560622146
+      ],
+      [
+       -124.23251326535858,
+       43.25815914568143
+      ],
+      [
+       -122.87975240369762,
+       43.26473618104694
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -124.06083671579891,
+       44.24848262699278
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.24165383033673,
+    43.25815914568143,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2024-09-04T10:02:16.594Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 44.697797,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 142.03862431246,
+    "view:sun_elevation": 64.09430052044141,
+    "s2:degraded_msi_data_percentage": 0.0102,
+    "s2:nodata_pixel_percentage": 3.750747,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.05007,
+    "s2:cloud_shadow_percentage": 0.76021,
+    "s2:vegetation_percentage": 45.937958,
+    "s2:not_vegetated_percentage": 5.963511,
+    "s2:water_percentage": 0.23265,
+    "s2:unclassified_percentage": 2.357808,
+    "s2:medium_proba_clouds_percentage": 9.342322,
+    "s2:high_proba_clouds_percentage": 17.336704,
+    "s2:thin_cirrus_percentage": 18.018772,
+    "s2:snow_ice_percentage": 0,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2A_MSIL2A_20190712T185921_N0500_R013_T10TDP_20230701T082507.SAFE",
+    "s2:generation_time": "2023-07-01T08:25:07.000000Z",
+    "s2:datatake_id": "GS2A_20190712T185921_021174_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_S2RP_20230701T082507_S20190712T190609_N05.00",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_S2RP_20230701T082507_A021174_T10TDP_N05.00",
+    "s2:reflectance_conversion_factor": 0.96743071124093,
+    "datetime": "2019-07-12T19:12:33.475000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2A_10TDP_20190712_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/25f333fa97092984545348a4f51e9c4f",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-04T10:02:16.594Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json"
+   ],
+   "id": "S2A_10TDP_20190712_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.06284057385994,
+       44.24846399871738
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -122.87975240369762,
+       43.26473618104694
+      ],
+      [
+       -124.23251326535858,
+       43.25815914568143
+      ],
+      [
+       -124.24174660834593,
+       43.71055819348181
+      ],
+      [
+       -124.06284057385994,
+       44.24846399871738
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.24174660834593,
+    43.25815914568143,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2022-11-03T14:17:37.606Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 33.689716,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 142.037332869941,
+    "view:sun_elevation": 64.09388416013991,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 3.6888,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.241547,
+    "s2:cloud_shadow_percentage": 0.383574,
+    "s2:vegetation_percentage": 53.349406,
+    "s2:not_vegetated_percentage": 7.034968,
+    "s2:water_percentage": 0.288336,
+    "s2:unclassified_percentage": 5.012448,
+    "s2:medium_proba_clouds_percentage": 6.947822,
+    "s2:high_proba_clouds_percentage": 17.43691,
+    "s2:thin_cirrus_percentage": 9.304984,
+    "s2:snow_ice_percentage": 3e-06,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.13",
+    "s2:product_uri": "S2A_MSIL2A_20190712T185921_N0213_R013_T10TDP_20190712T231316.SAFE",
+    "s2:generation_time": "2019-07-12T23:13:16.000000Z",
+    "s2:datatake_id": "GS2A_20190712T185921_021174_N02.13",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_SGS__20190712T231316_S20190712T190609_N02.13",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_SGS__20190712T231316_A021174_T10TDP_N02.13",
+    "s2:reflectance_conversion_factor": 0.96743071124093,
+    "datetime": "2019-07-12T19:12:33.474000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2A_10TDP_20190712_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/3a0ac6374e6238fb9b46b3e9998a937a",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T05:47:50.709Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json"
+   ],
+   "id": "S2A_10TEP_20190712_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ],
+      [
+       -123.00023411279824,
+       43.26479938161411
+      ],
+      [
+       -121.64751808492417,
+       43.256803441562624
+      ],
+      [
+       -121.62507267186578,
+       44.24513356156721
+      ],
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.0002379995488,
+    43.256803441562624,
+    -121.62507267186578,
+    44.253408577534294
+   ],
+   "properties": {
+    "created": "2024-09-04T09:35:29.988Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 6.198775,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 144.370520642198,
+    "view:sun_elevation": 64.626898096559,
+    "s2:degraded_msi_data_percentage": 0.0001,
+    "s2:nodata_pixel_percentage": 0,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.498283,
+    "s2:cloud_shadow_percentage": 2.513801,
+    "s2:vegetation_percentage": 81.19036,
+    "s2:not_vegetated_percentage": 6.638604,
+    "s2:water_percentage": 1.287,
+    "s2:unclassified_percentage": 0.8445,
+    "s2:medium_proba_clouds_percentage": 3.151429,
+    "s2:high_proba_clouds_percentage": 3.03716,
+    "s2:thin_cirrus_percentage": 0.010186,
+    "s2:snow_ice_percentage": 0.828677,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2A_MSIL2A_20190712T185921_N0500_R013_T10TEP_20230701T082507.SAFE",
+    "s2:generation_time": "2023-07-01T08:25:07.000000Z",
+    "s2:datatake_id": "GS2A_20190712T185921_021174_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_S2RP_20230701T082507_S20190712T190609_N05.00",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_S2RP_20230701T082507_A021174_T10TEP_N05.00",
+    "s2:reflectance_conversion_factor": 0.96743071124093,
+    "datetime": "2019-07-12T19:12:29.848000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2A_10TEP_20190712_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/2c3b7bd91af16065be3a089bf8306e6c",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-04T09:35:29.988Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json"
+   ],
+   "id": "S2A_10TEP_20190712_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ],
+      [
+       -121.62507267186578,
+       44.24513356156721
+      ],
+      [
+       -121.64751808492417,
+       43.256803441562624
+      ],
+      [
+       -123.00023411279824,
+       43.26479938161411
+      ],
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.0002379995488,
+    43.256803441562624,
+    -121.62507267186578,
+    44.253408577534294
+   ],
+   "properties": {
+    "created": "2022-11-08T06:41:12.796Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 4.114377,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 144.369177504238,
+    "view:sun_elevation": 64.6264982579952,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 3.3e-05,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 1.292043,
+    "s2:cloud_shadow_percentage": 1.607434,
+    "s2:vegetation_percentage": 82.562554,
+    "s2:not_vegetated_percentage": 7.152829,
+    "s2:water_percentage": 1.346064,
+    "s2:unclassified_percentage": 1.179071,
+    "s2:medium_proba_clouds_percentage": 0.974791,
+    "s2:high_proba_clouds_percentage": 3.058611,
+    "s2:thin_cirrus_percentage": 0.080975,
+    "s2:snow_ice_percentage": 0.745631,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.13",
+    "s2:product_uri": "S2A_MSIL2A_20190712T185921_N0213_R013_T10TEP_20190712T231316.SAFE",
+    "s2:generation_time": "2019-07-12T23:13:16.000000Z",
+    "s2:datatake_id": "GS2A_20190712T185921_021174_N02.13",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_SGS__20190712T231316_S20190712T190609_N02.13",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_SGS__20190712T231316_A021174_T10TEP_N02.13",
+    "s2:reflectance_conversion_factor": 0.96743071124093,
+    "datetime": "2019-07-12T19:12:29.847000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2A_10TEP_20190712_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/b0b9ffc8002095e0b64cd7b5fd6b65d8",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T06:41:12.796Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json"
+   ],
+   "id": "S2B_10TDP_20190710_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ],
+      [
+       -124.23253142659657,
+       43.259059411576565
+      ],
+      [
+       -123.16014159351877,
+       43.266127562357696
+      ],
+      [
+       -123.015461550337,
+       43.64016244849844
+      ],
+      [
+       -122.87831682532473,
+       43.98071515274617
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.2529690327714,
+    43.259059411576565,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2024-09-04T18:20:58.192Z",
+    "platform": "sentinel-2b",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 91.094953,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 146.734201866557,
+    "view:sun_elevation": 65.415326438728,
+    "s2:degraded_msi_data_percentage": 0.0212,
+    "s2:nodata_pixel_percentage": 7.477338,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.013229,
+    "s2:cloud_shadow_percentage": 0.393148,
+    "s2:vegetation_percentage": 4.763322,
+    "s2:not_vegetated_percentage": 1.241766,
+    "s2:water_percentage": 0.037814,
+    "s2:unclassified_percentage": 2.455768,
+    "s2:medium_proba_clouds_percentage": 11.678723,
+    "s2:high_proba_clouds_percentage": 78.21461,
+    "s2:thin_cirrus_percentage": 1.201617,
+    "s2:snow_ice_percentage": 0,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2B_MSIL2A_20190710T190919_N0500_R056_T10TDP_20230604T125407.SAFE",
+    "s2:generation_time": "2023-06-04T12:54:07.000000Z",
+    "s2:datatake_id": "GS2B_20190710T190919_012237_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_S2RP_20230604T125407_S20190710T191733_N05.00",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_S2RP_20230604T125407_A012237_T10TDP_N05.00",
+    "s2:reflectance_conversion_factor": 0.967377376190035,
+    "datetime": "2019-07-10T19:22:33.221000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2B_10TDP_20190710_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/51fb1dfc85de7b8effcafbb64c5e1ac1",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-04T18:20:58.192Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json"
+   ],
+   "id": "S2B_10TDP_20190710_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -122.87833485100775,
+       43.97188738785833
+      ],
+      [
+       -123.01099878641841,
+       43.642954065129594
+      ],
+      [
+       -123.15691270483028,
+       43.264691763526294
+      ],
+      [
+       -124.23251326535858,
+       43.25815914568143
+      ],
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.2529690327714,
+    43.25815914568143,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2022-11-03T14:17:35.823Z",
+    "platform": "sentinel-2b",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 86.304578,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 146.732783882714,
+    "view:sun_elevation": 65.414944894629,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 7.291362,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.06265,
+    "s2:cloud_shadow_percentage": 0.111236,
+    "s2:vegetation_percentage": 5.402431,
+    "s2:not_vegetated_percentage": 1.445935,
+    "s2:water_percentage": 0.042358,
+    "s2:unclassified_percentage": 3.891255,
+    "s2:medium_proba_clouds_percentage": 6.806226,
+    "s2:high_proba_clouds_percentage": 78.149259,
+    "s2:thin_cirrus_percentage": 1.349093,
+    "s2:snow_ice_percentage": 2.739557,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.13",
+    "s2:product_uri": "S2B_MSIL2A_20190710T190919_N0213_R056_T10TDP_20190710T214204.SAFE",
+    "s2:generation_time": "2019-07-10T21:42:04.000000Z",
+    "s2:datatake_id": "GS2B_20190710T190919_012237_N02.13",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_SGS__20190710T214204_S20190710T191733_N02.13",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_SGS__20190710T214204_A012237_T10TDP_N02.13",
+    "s2:reflectance_conversion_factor": 0.967377376190035,
+    "datetime": "2019-07-10T19:22:33.220000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2B_10TDP_20190710_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/663b71e20a95bed04e7ffe29db11259c",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T05:52:36.366Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+   ],
+   "id": "S2B_10TEP_20190710_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.998985368414,
+       44.25340857327628
+      ],
+      [
+       -122.76607717089134,
+       44.25316907240177
+      ],
+      [
+       -122.99887254485466,
+       43.671217115036654
+      ],
+      [
+       -122.998985368414,
+       44.25340857327628
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -122.998985368414,
+    43.671217115036654,
+    -122.76607717089134,
+    44.25340857327628
+   ],
+   "properties": {
+    "created": "2022-11-03T19:59:54.590Z",
+    "platform": "sentinel-2b",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 66.670085,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 149.243493717606,
+    "view:sun_elevation": 65.8857367635611,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 94.887662,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.234868,
+    "s2:cloud_shadow_percentage": 0.567214,
+    "s2:vegetation_percentage": 19.47867,
+    "s2:not_vegetated_percentage": 4.009826,
+    "s2:water_percentage": 0.068144,
+    "s2:unclassified_percentage": 8.938291,
+    "s2:medium_proba_clouds_percentage": 15.180434,
+    "s2:high_proba_clouds_percentage": 40.144271,
+    "s2:thin_cirrus_percentage": 11.345381,
+    "s2:snow_ice_percentage": 0.032904,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.13",
+    "s2:product_uri": "S2B_MSIL2A_20190710T190919_N0213_R056_T10TEP_20190710T214204.SAFE",
+    "s2:generation_time": "2019-07-10T21:42:04.000000Z",
+    "s2:datatake_id": "GS2B_20190710T190919_012237_N02.13",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_SGS__20190710T214204_S20190710T191733_N02.13",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_SGS__20190710T214204_A012237_T10TEP_N02.13",
+    "s2:reflectance_conversion_factor": 0.967377376190035,
+    "datetime": "2019-07-10T19:22:25.384000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2B_10TEP_20190710_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/70d9bb5502532a0de84da12b2a945a67",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T13:13:38.273Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json"
+   ],
+   "id": "S2B_10TEP_20190710_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ],
+      [
+       -123.00023571384865,
+       43.67817012650657
+      ],
+      [
+       -122.7700856024213,
+       44.25317721028138
+      ],
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.0002379995488,
+    43.67817012650657,
+    -122.7700856024213,
+    44.253408577534294
+   ],
+   "properties": {
+    "created": "2024-09-04T18:14:04.380Z",
+    "platform": "sentinel-2b",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 71.902418,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 149.244965715737,
+    "view:sun_elevation": 65.886099194726,
+    "s2:degraded_msi_data_percentage": 0.0033,
+    "s2:nodata_pixel_percentage": 95.04056,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.022947,
+    "s2:cloud_shadow_percentage": 1.885963,
+    "s2:vegetation_percentage": 16.933529,
+    "s2:not_vegetated_percentage": 3.84565,
+    "s2:water_percentage": 0.050576,
+    "s2:unclassified_percentage": 5.358916,
+    "s2:medium_proba_clouds_percentage": 20.532453,
+    "s2:high_proba_clouds_percentage": 41.061896,
+    "s2:thin_cirrus_percentage": 10.308072,
+    "s2:snow_ice_percentage": 0,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2B_MSIL2A_20190710T190919_N0500_R056_T10TEP_20230604T125407.SAFE",
+    "s2:generation_time": "2023-06-04T12:54:07.000000Z",
+    "s2:datatake_id": "GS2B_20190710T190919_012237_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_S2RP_20230604T125407_S20190710T191733_N05.00",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_S2RP_20230604T125407_A012237_T10TEP_N05.00",
+    "s2:reflectance_conversion_factor": 0.967377376190035,
+    "datetime": "2019-07-10T19:22:25.363000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2B_10TEP_20190710_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/1fbcffa102e59f03e0bc1903d356c4a5",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-04T18:14:04.380Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json"
+   ],
+   "id": "S2B_10TDP_20190707_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.06008556642325,
+       44.248489600770675
+      ],
+      [
+       -124.24157556909991,
+       43.70227322492807
+      ],
+      [
+       -124.23251326535858,
+       43.25815914568143
+      ],
+      [
+       -122.87975240369762,
+       43.26473618104694
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -124.06008556642325,
+       44.248489600770675
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.24157556909991,
+    43.25815914568143,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2024-09-05T17:08:19.076Z",
+    "platform": "sentinel-2b",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 8.182973,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 141.702885549904,
+    "view:sun_elevation": 64.72820240336969,
+    "s2:degraded_msi_data_percentage": 0.0112,
+    "s2:nodata_pixel_percentage": 3.802376,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.116338,
+    "s2:cloud_shadow_percentage": 1.084056,
+    "s2:vegetation_percentage": 79.437524,
+    "s2:not_vegetated_percentage": 8.137312,
+    "s2:water_percentage": 2.163157,
+    "s2:unclassified_percentage": 0.877224,
+    "s2:medium_proba_clouds_percentage": 4.140141,
+    "s2:high_proba_clouds_percentage": 4.040235,
+    "s2:thin_cirrus_percentage": 0.002597,
+    "s2:snow_ice_percentage": 0.001414,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2B_MSIL2A_20190707T185929_N0500_R013_T10TDP_20230604T182653.SAFE",
+    "s2:generation_time": "2023-06-04T18:26:53.000000Z",
+    "s2:datatake_id": "GS2B_20190707T185929_012194_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_S2RP_20230604T182653_S20190707T190830_N05.00",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_S2RP_20230604T182653_A012194_T10TDP_N05.00",
+    "s2:reflectance_conversion_factor": 0.967367678999038,
+    "datetime": "2019-07-07T19:12:37.131000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2B_10TDP_20190707_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/1725be1468b8c9ec9922f75d3dd89839",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-05T17:08:19.076Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json"
+   ],
+   "id": "S2B_10TDP_20190707_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.06684821316833,
+       44.24842663739693
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -122.87975240369762,
+       43.26473618104694
+      ],
+      [
+       -124.23251326535858,
+       43.25815914568143
+      ],
+      [
+       -124.2419434502292,
+       43.72008862624993
+      ],
+      [
+       -124.06684821316833,
+       44.24842663739693
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.2419434502292,
+    43.25815914568143,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2022-11-08T05:52:46.429Z",
+    "platform": "sentinel-2b",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 5.86016,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 141.701574046602,
+    "view:sun_elevation": 64.72778171344561,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 3.554527,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.371412,
+    "s2:cloud_shadow_percentage": 0.651184,
+    "s2:vegetation_percentage": 80.708987,
+    "s2:not_vegetated_percentage": 8.009505,
+    "s2:water_percentage": 2.323188,
+    "s2:unclassified_percentage": 2.075561,
+    "s2:medium_proba_clouds_percentage": 1.896472,
+    "s2:high_proba_clouds_percentage": 3.950202,
+    "s2:thin_cirrus_percentage": 0.013485,
+    "s2:snow_ice_percentage": 0,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.12",
+    "s2:product_uri": "S2B_MSIL2A_20190707T185929_N0212_R013_T10TDP_20190707T212424.SAFE",
+    "s2:generation_time": "2019-07-07T21:24:24.000000Z",
+    "s2:datatake_id": "GS2B_20190707T185929_012194_N02.12",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_SGS__20190707T212424_S20190707T190830_N02.12",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_SGS__20190707T212424_A012194_T10TDP_N02.12",
+    "s2:reflectance_conversion_factor": 0.967367678999038,
+    "datetime": "2019-07-07T19:12:37.129000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2B_10TDP_20190707_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/9e8ddeae69b5eda9c2e8157cf8c444b3",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T05:52:46.429Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json"
+   ],
+   "id": "S2B_10TEP_20190707_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ],
+      [
+       -123.00023411279824,
+       43.26479938161411
+      ],
+      [
+       -121.64751808492417,
+       43.256803441562624
+      ],
+      [
+       -121.62507267186578,
+       44.24513356156721
+      ],
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.0002379995488,
+    43.256803441562624,
+    -121.62507267186578,
+    44.253408577534294
+   ],
+   "properties": {
+    "created": "2024-09-05T17:12:37.136Z",
+    "platform": "sentinel-2b",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 7.111356,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 144.071535869402,
+    "view:sun_elevation": 65.2647183015445,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 0,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.419604,
+    "s2:cloud_shadow_percentage": 1.053666,
+    "s2:vegetation_percentage": 80.203289,
+    "s2:not_vegetated_percentage": 8.025631,
+    "s2:water_percentage": 1.334846,
+    "s2:unclassified_percentage": 0.795342,
+    "s2:medium_proba_clouds_percentage": 3.702134,
+    "s2:high_proba_clouds_percentage": 3.35695,
+    "s2:thin_cirrus_percentage": 0.052273,
+    "s2:snow_ice_percentage": 1.056261,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2B_MSIL2A_20190707T185929_N0500_R013_T10TEP_20230604T182653.SAFE",
+    "s2:generation_time": "2023-06-04T18:26:53.000000Z",
+    "s2:datatake_id": "GS2B_20190707T185929_012194_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_S2RP_20230604T182653_S20190707T190830_N05.00",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_S2RP_20230604T182653_A012194_T10TEP_N05.00",
+    "s2:reflectance_conversion_factor": 0.967367678999038,
+    "datetime": "2019-07-07T19:12:33.505000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2B_10TEP_20190707_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/7efa886a62cabd449ceb3d54042ad6b4",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-05T17:12:37.136Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json"
+   ],
+   "id": "S2B_10TEP_20190707_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ],
+      [
+       -121.62507267186578,
+       44.24513356156721
+      ],
+      [
+       -121.64751808492417,
+       43.256803441562624
+      ],
+      [
+       -123.00023411279824,
+       43.26479938161411
+      ],
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.0002379995488,
+    43.256803441562624,
+    -121.62507267186578,
+    44.253408577534294
+   ],
+   "properties": {
+    "created": "2022-11-08T06:39:28.684Z",
+    "platform": "sentinel-2b",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 5.044662,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 144.07016984949,
+    "view:sun_elevation": 65.2643143335898,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 7e-06,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.668757,
+    "s2:cloud_shadow_percentage": 0.744457,
+    "s2:vegetation_percentage": 81.527066,
+    "s2:not_vegetated_percentage": 8.024562,
+    "s2:water_percentage": 1.370002,
+    "s2:unclassified_percentage": 1.680154,
+    "s2:medium_proba_clouds_percentage": 1.689484,
+    "s2:high_proba_clouds_percentage": 3.288822,
+    "s2:thin_cirrus_percentage": 0.066357,
+    "s2:snow_ice_percentage": 0.940339,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.12",
+    "s2:product_uri": "S2B_MSIL2A_20190707T185929_N0212_R013_T10TEP_20190707T212424.SAFE",
+    "s2:generation_time": "2019-07-07T21:24:24.000000Z",
+    "s2:datatake_id": "GS2B_20190707T185929_012194_N02.12",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2B_OPER_MSI_L2A_DS_SGS__20190707T212424_S20190707T190830_N02.12",
+    "s2:granule_id": "S2B_OPER_MSI_L2A_TL_SGS__20190707T212424_A012194_T10TEP_N02.12",
+    "s2:reflectance_conversion_factor": 0.967367678999038,
+    "datetime": "2019-07-07T19:12:33.503000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2B_10TEP_20190707_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/6643ad594e4ffaa5b45318098f9aa4d6",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T06:39:28.684Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json"
+   ],
+   "id": "S2A_10TDP_20190705_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ],
+      [
+       -124.23253142659576,
+       43.25905941153572
+      ],
+      [
+       -123.15404291206632,
+       43.26613566272858
+      ],
+      [
+       -123.00889083108046,
+       43.64214400699677
+      ],
+      [
+       -122.87834753424619,
+       43.9656735708035
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.2529690327714,
+    43.25905941153572,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2024-09-07T20:21:58.664Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 71.738905,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 146.511592210153,
+    "view:sun_elevation": 65.9933291070524,
+    "s2:degraded_msi_data_percentage": 0.0237,
+    "s2:nodata_pixel_percentage": 7.174771,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.090512,
+    "s2:cloud_shadow_percentage": 0.003435,
+    "s2:vegetation_percentage": 16.740422,
+    "s2:not_vegetated_percentage": 4.115029,
+    "s2:water_percentage": 3.963365,
+    "s2:unclassified_percentage": 3.345971,
+    "s2:medium_proba_clouds_percentage": 10.156709,
+    "s2:high_proba_clouds_percentage": 60.769898,
+    "s2:thin_cirrus_percentage": 0.812296,
+    "s2:snow_ice_percentage": 0.002366,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2A_MSIL2A_20190705T190921_N0500_R056_T10TDP_20230718T101939.SAFE",
+    "s2:generation_time": "2023-07-18T10:19:39.000000Z",
+    "s2:datatake_id": "GS2A_20190705T190921_021074_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_S2RP_20230718T101939_S20190705T191341_N05.00",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_S2RP_20230718T101939_A021074_T10TDP_N05.00",
+    "s2:reflectance_conversion_factor": 0.967408169971489,
+    "datetime": "2019-07-05T19:22:29.395000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2A_10TDP_20190705_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/8a866cf6d2e2e9696f1a11d079d2d2f3",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-07T20:21:58.664Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json"
+   ],
+   "id": "S2A_10TDP_20190705_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -122.87834863353218,
+       43.96513491047915
+      ],
+      [
+       -123.0086428671256,
+       43.64205393227606
+      ],
+      [
+       -123.15432522023393,
+       43.26469528351108
+      ],
+      [
+       -124.23251326535858,
+       43.25815914568143
+      ],
+      [
+       -124.2529690327714,
+       44.24653657735239
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.2529690327714,
+    43.25815914568143,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2022-11-08T05:52:51.223Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 69.200502,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 146.510153280477,
+    "view:sun_elevation": 65.99294461774289,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 7.154286,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.118483,
+    "s2:cloud_shadow_percentage": 0.242226,
+    "s2:vegetation_percentage": 17.110805,
+    "s2:not_vegetated_percentage": 3.690876,
+    "s2:water_percentage": 3.970777,
+    "s2:unclassified_percentage": 5.666316,
+    "s2:medium_proba_clouds_percentage": 8.080674,
+    "s2:high_proba_clouds_percentage": 60.79489,
+    "s2:thin_cirrus_percentage": 0.324938,
+    "s2:snow_ice_percentage": 7e-06,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190705T190921_N0212_R056_T10TDP_20190706T011514.SAFE",
+    "s2:generation_time": "2019-07-06T01:15:14.000000Z",
+    "s2:datatake_id": "GS2A_20190705T190921_021074_N02.12",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_EPAE_20190706T011514_S20190705T191341_N02.12",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_EPAE_20190706T011514_A021074_T10TDP_N02.12",
+    "s2:reflectance_conversion_factor": 0.967408169971489,
+    "datetime": "2019-07-05T19:22:29.395000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2A_10TDP_20190705_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/fcbca3f962db77bc06b1b7d9ecf8d16e",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T05:52:51.223Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json"
+   ],
+   "id": "S2A_10TEP_20190705_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -122.99898536843371,
+       44.25340857327628
+      ],
+      [
+       -122.7635719847052,
+       44.25316391497355
+      ],
+      [
+       -122.99887264352023,
+       43.6651820167095
+      ],
+      [
+       -122.99898536843371,
+       44.25340857327628
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -122.99898536843371,
+    43.6651820167095,
+    -122.7635719847052,
+    44.25340857327628
+   ],
+   "properties": {
+    "created": "2022-11-08T06:38:58.648Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 92.08528,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 149.062915061439,
+    "view:sun_elevation": 66.466391190663,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 94.770873,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.00203,
+    "s2:cloud_shadow_percentage": 0.103486,
+    "s2:vegetation_percentage": 3.483554,
+    "s2:not_vegetated_percentage": 0.410517,
+    "s2:water_percentage": 0,
+    "s2:unclassified_percentage": 3.915135,
+    "s2:medium_proba_clouds_percentage": 6.364022,
+    "s2:high_proba_clouds_percentage": 85.710472,
+    "s2:thin_cirrus_percentage": 0.010786,
+    "s2:snow_ice_percentage": 0,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190705T190921_N0212_R056_T10TEP_20190706T011514.SAFE",
+    "s2:generation_time": "2019-07-06T01:15:14.000000Z",
+    "s2:datatake_id": "GS2A_20190705T190921_021074_N02.12",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_EPAE_20190706T011514_S20190705T191341_N02.12",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_EPAE_20190706T011514_A021074_T10TEP_N02.12",
+    "s2:reflectance_conversion_factor": 0.967408169971489,
+    "datetime": "2019-07-05T19:22:21.585000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2A_10TEP_20190705_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/289b40025312281a6e424382585ca54d",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T06:38:58.648Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json"
+   ],
+   "id": "S2A_10TEP_20190705_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ],
+      [
+       -123.00023565676698,
+       43.66358293011311
+      ],
+      [
+       -122.7641983401897,
+       44.25316520960285
+      ],
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.0002379995488,
+    43.66358293011311,
+    -122.7641983401897,
+    44.253408577534294
+   ],
+   "properties": {
+    "created": "2024-09-07T22:19:33.706Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 94.019616,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 149.064410774613,
+    "view:sun_elevation": 66.466756314604,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 94.788498,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.015152,
+    "s2:cloud_shadow_percentage": 0,
+    "s2:vegetation_percentage": 3.129074,
+    "s2:not_vegetated_percentage": 1.445613,
+    "s2:water_percentage": 0,
+    "s2:unclassified_percentage": 1.390544,
+    "s2:medium_proba_clouds_percentage": 8.058688,
+    "s2:high_proba_clouds_percentage": 85.697043,
+    "s2:thin_cirrus_percentage": 0.263886,
+    "s2:snow_ice_percentage": 0,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2A_MSIL2A_20190705T190921_N0500_R056_T10TEP_20230718T101939.SAFE",
+    "s2:generation_time": "2023-07-18T10:19:39.000000Z",
+    "s2:datatake_id": "GS2A_20190705T190921_021074_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_S2RP_20230718T101939_S20190705T191341_N05.00",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_S2RP_20230718T101939_A021074_T10TEP_N05.00",
+    "s2:reflectance_conversion_factor": 0.967408169971489,
+    "datetime": "2019-07-05T19:22:21.578000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2A_10TEP_20190705_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/bfef3a78567cd68eb8cd1aa21c8e483b",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-07T22:19:33.706Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json"
+   ],
+   "id": "S2A_10TDP_20190702_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.05933441279156,
+       44.24849656964726
+      ],
+      [
+       -124.24149732480475,
+       43.6984819670742
+      ],
+      [
+       -124.23251326535858,
+       43.25815914568143
+      ],
+      [
+       -122.87975240369762,
+       43.26473618104694
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -124.05933441279156,
+       44.24849656964726
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.24149732480475,
+    43.25815914568143,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2024-09-13T02:47:33.498Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 95.763195,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 141.557208218725,
+    "view:sun_elevation": 65.2235600595295,
+    "s2:degraded_msi_data_percentage": 0.0505,
+    "s2:nodata_pixel_percentage": 3.849237,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.03215,
+    "s2:cloud_shadow_percentage": 0.008333,
+    "s2:vegetation_percentage": 1.600269,
+    "s2:not_vegetated_percentage": 0.609032,
+    "s2:water_percentage": 0.758397,
+    "s2:unclassified_percentage": 1.228622,
+    "s2:medium_proba_clouds_percentage": 6.49901,
+    "s2:high_proba_clouds_percentage": 89.000416,
+    "s2:thin_cirrus_percentage": 0.263772,
+    "s2:snow_ice_percentage": 0,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2A_MSIL2A_20190702T185921_N0500_R013_T10TDP_20230717T070910.SAFE",
+    "s2:generation_time": "2023-07-17T07:09:10.000000Z",
+    "s2:datatake_id": "GS2A_20190702T185921_021031_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_S2RP_20230717T070910_S20190702T190417_N05.00",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_S2RP_20230717T070910_A021031_T10TDP_N05.00",
+    "s2:reflectance_conversion_factor": 0.967539939098264,
+    "datetime": "2019-07-02T19:12:33.176000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2A_10TDP_20190702_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/3cd1226cd6166b9e65f9543fc6cfdb86",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-13T02:47:33.498Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json"
+   ],
+   "id": "S2A_10TDP_20190702_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -124.06058661374252,
+       44.248484949524595
+      ],
+      [
+       -122.87775605403674,
+       44.25334317082778
+      ],
+      [
+       -122.87975240369762,
+       43.26473618104694
+      ],
+      [
+       -124.23251326535858,
+       43.25815914568143
+      ],
+      [
+       -124.24158660277558,
+       43.702807792120595
+      ],
+      [
+       -124.06058661374252,
+       44.248484949524595
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -124.24158660277558,
+    43.25815914568143,
+    -122.87775605403674,
+    44.25334317082778
+   ],
+   "properties": {
+    "created": "2022-11-08T05:57:45.086Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 94.463794,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "DP",
+    "grid:code": "MGRS-10TDP",
+    "view:sun_azimuth": 141.555867779246,
+    "view:sun_elevation": 65.223133819522,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 3.786219,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.025949,
+    "s2:cloud_shadow_percentage": 0.08331,
+    "s2:vegetation_percentage": 1.692804,
+    "s2:not_vegetated_percentage": 0.514657,
+    "s2:water_percentage": 0.791264,
+    "s2:unclassified_percentage": 2.297833,
+    "s2:medium_proba_clouds_percentage": 5.368771,
+    "s2:high_proba_clouds_percentage": 88.96876,
+    "s2:thin_cirrus_percentage": 0.126263,
+    "s2:snow_ice_percentage": 0.130388,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190702T185921_N0212_R013_T10TDP_20190702T231712.SAFE",
+    "s2:generation_time": "2019-07-02T23:17:12.000000Z",
+    "s2:datatake_id": "GS2A_20190702T185921_021031_N02.12",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_SGS__20190702T231712_S20190702T190417_N02.12",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_SGS__20190702T231712_A021031_T10TDP_N02.12",
+    "s2:reflectance_conversion_factor": 0.967539939098264,
+    "datetime": "2019-07-02T19:12:33.175000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/DP/2019/7/S2A_10TDP_20190702_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/2695e70e9ddb55934b3a1725ab0aebcf",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T05:57:45.086Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/eo/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json"
+   ],
+   "id": "S2A_10TEP_20190702_1_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ],
+      [
+       -123.00023411279824,
+       43.26479938161411
+      ],
+      [
+       -121.64751808492417,
+       43.256803441562624
+      ],
+      [
+       -121.62507267186578,
+       44.24513356156721
+      ],
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.0002379995488,
+    43.256803441562624,
+    -121.62507267186578,
+    44.253408577534294
+   ],
+   "properties": {
+    "created": "2024-09-13T02:14:13.824Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 66.722631,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 143.958208058445,
+    "view:sun_elevation": 65.761682285993,
+    "s2:degraded_msi_data_percentage": 0.0076,
+    "s2:nodata_pixel_percentage": 0,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 0.58889,
+    "s2:cloud_shadow_percentage": 1.862217,
+    "s2:vegetation_percentage": 21.858713,
+    "s2:not_vegetated_percentage": 4.325261,
+    "s2:water_percentage": 0.830717,
+    "s2:unclassified_percentage": 2.818508,
+    "s2:medium_proba_clouds_percentage": 11.183672,
+    "s2:high_proba_clouds_percentage": 55.425596,
+    "s2:thin_cirrus_percentage": 0.113357,
+    "s2:snow_ice_percentage": 0.993066,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "05.00",
+    "s2:product_uri": "S2A_MSIL2A_20190702T185921_N0500_R013_T10TEP_20230717T070910.SAFE",
+    "s2:generation_time": "2023-07-17T07:09:10.000000Z",
+    "s2:datatake_id": "GS2A_20190702T185921_021031_N05.00",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_S2RP_20230717T070910_S20190702T190417_N05.00",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_S2RP_20230717T070910_A021031_T10TEP_N05.00",
+    "s2:reflectance_conversion_factor": 0.967539939098264,
+    "datetime": "2019-07-02T19:12:29.544000Z",
+    "s2:sequence": "1",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2A_10TEP_20190702_1_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/f9be07cc3201edff5757d0139d0a55a5",
+    "earthsearch:boa_offset_applied": true,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.1"
+    },
+    "updated": "2024-09-13T02:14:13.824Z"
+   },
+   "assets": {},
+   "links": []
+  },
+  {
+   "type": "Feature",
+   "stac_version": "1.0.0",
+   "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/mgrs/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/view/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/processing/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/raster/v1.1.0/schema.json",
+    "https://stac-extensions.github.io/grid/v1.0.0/schema.json"
+   ],
+   "id": "S2A_10TEP_20190702_0_L2A",
+   "collection": "sentinel-2-l2a",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ],
+      [
+       -121.62507267186578,
+       44.24513356156721
+      ],
+      [
+       -121.64751808492417,
+       43.256803441562624
+      ],
+      [
+       -123.00023411279824,
+       43.26479938161411
+      ],
+      [
+       -123.0002379995488,
+       44.253408577534294
+      ]
+     ]
+    ]
+   },
+   "bbox": [
+    -123.0002379995488,
+    43.256803441562624,
+    -121.62507267186578,
+    44.253408577534294
+   ],
+   "properties": {
+    "created": "2022-11-08T06:48:58.567Z",
+    "platform": "sentinel-2a",
+    "constellation": "sentinel-2",
+    "instruments": [
+     "msi"
+    ],
+    "eo:cloud_cover": 61.746331,
+    "proj:epsg": 32610,
+    "mgrs:utm_zone": 10,
+    "mgrs:latitude_band": "T",
+    "mgrs:grid_square": "EP",
+    "grid:code": "MGRS-10TEP",
+    "view:sun_azimuth": 143.956810371485,
+    "view:sun_elevation": 65.7612731163903,
+    "s2:degraded_msi_data_percentage": 0,
+    "s2:nodata_pixel_percentage": 7e-06,
+    "s2:saturated_defective_pixel_percentage": 0,
+    "s2:dark_features_percentage": 1.396419,
+    "s2:cloud_shadow_percentage": 2.060023,
+    "s2:vegetation_percentage": 23.006965,
+    "s2:not_vegetated_percentage": 4.58314,
+    "s2:water_percentage": 0.883594,
+    "s2:unclassified_percentage": 5.273526,
+    "s2:medium_proba_clouds_percentage": 6.160703,
+    "s2:high_proba_clouds_percentage": 55.45519,
+    "s2:thin_cirrus_percentage": 0.130438,
+    "s2:snow_ice_percentage": 1.050003,
+    "s2:product_type": "S2MSI2A",
+    "s2:processing_baseline": "02.12",
+    "s2:product_uri": "S2A_MSIL2A_20190702T185921_N0212_R013_T10TEP_20190702T231712.SAFE",
+    "s2:generation_time": "2019-07-02T23:17:12.000000Z",
+    "s2:datatake_id": "GS2A_20190702T185921_021031_N02.12",
+    "s2:datatake_type": "INS-NOBS",
+    "s2:datastrip_id": "S2A_OPER_MSI_L2A_DS_SGS__20190702T231712_S20190702T190417_N02.12",
+    "s2:granule_id": "S2A_OPER_MSI_L2A_TL_SGS__20190702T231712_A021031_T10TEP_N02.12",
+    "s2:reflectance_conversion_factor": 0.967539939098264,
+    "datetime": "2019-07-02T19:12:29.542000Z",
+    "s2:sequence": "0",
+    "earthsearch:s3_path": "s3://sentinel-cogs/sentinel-s2-l2a-cogs/10/T/EP/2019/7/S2A_10TEP_20190702_0_L2A",
+    "earthsearch:payload_id": "roda-sentinel2/workflow-sentinel2-to-stac/3543e8f638e4bcf4195c761cb29832b9",
+    "earthsearch:boa_offset_applied": false,
+    "processing:software": {
+     "sentinel2-to-stac": "0.1.0"
+    },
+    "updated": "2022-11-08T06:48:58.567Z"
+   },
+   "assets": {},
+   "links": []
+  }
+ ]
+}

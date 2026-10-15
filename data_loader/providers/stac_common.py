@@ -167,22 +167,54 @@ def _landsat_generation_time(item, product_id: Optional[str]) -> Optional[str]:
     return None
 
 
-def _s2_stable_key(properties: dict) -> tuple:
-    datatake = properties.get("s2:datatake_id") or ""
-    core = _DATATAKE_BASELINE_SUFFIX_RE.sub("", datatake)
-    tile = properties.get("grid:code") or properties.get("mgrs:grid_square") or ""
-    if core:
-        return (core, tile)
-    # s2:datatake_id missing is not expected from PC or Earth Search
-    # (confirmed present for both), but degrade to datetime+tile rather
-    # than crash if some other STAC source omits it.
-    return (properties.get("datetime"), tile)
+# MGRS tile id ("10TDP") inside an S2 product/granule id or item id, e.g.
+# "S2A_MSIL2A_20190715T190921_N0212_R056_T10TDP_20201005T142511".
+_S2_TILE_IN_ID_RE = re.compile(r"_T(\d{2}[C-X][A-Z]{2})(?:_|$)")
+
+
+def _s2_mgrs_tile(item) -> Optional[str]:
+    """The item's MGRS tile ("10TDP"). Catalogs name it differently:
+    Planetary Computer `s2:mgrs_tile`; Earth Search `grid:code`
+    ("MGRS-10TDP") and the split `mgrs:utm_zone`/`latitude_band`/
+    `grid_square` (grid_square alone, "DP", is ambiguous); otherwise the
+    tile embedded in the product, granule or item id."""
+    props = item.properties
+    if props.get("s2:mgrs_tile"):
+        return str(props["s2:mgrs_tile"]).upper()
+    code = props.get("grid:code")
+    if code and str(code).upper().startswith("MGRS-"):
+        return str(code)[5:].upper()
+    zone, band, square = (props.get(k) for k in ("mgrs:utm_zone", "mgrs:latitude_band", "mgrs:grid_square"))
+    if zone and band and square:
+        return f"{int(zone):02d}{band}{square}".upper()
+    for text in (props.get("s2:product_uri"), props.get("s2:granule_id"), item.id):
+        m = _S2_TILE_IN_ID_RE.search(str(text or ""))
+        if m:
+            return m.group(1)
+    return None
+
+
+def _s2_stable_key(item) -> tuple:
+    """Acquisition identity shared by every processing version of one
+    Sentinel-2 granule: (datatake without its _Nxx.yy baseline suffix,
+    MGRS tile). One datatake covers many tiles, so the tile is required:
+    without it, neighbouring tiles of one overpass collapse into one group
+    and all but one are dropped as if they were older versions. If either
+    part can't be determined the item is its own group (never dropped)."""
+    props = item.properties
+    tile = _s2_mgrs_tile(item)
+    core = _DATATAKE_BASELINE_SUFFIX_RE.sub("", props.get("s2:datatake_id") or "")
+    if not core and item.datetime is not None:
+        core = item.datetime.astimezone(timezone.utc).isoformat()
+    if not core or not tile:
+        return ("item", item.id)
+    return (core, tile)
 
 
 def _s2_version_candidates(items) -> list[VersionCandidate]:
     return [
         VersionCandidate(
-            key=_s2_stable_key(it.properties),
+            key=_s2_stable_key(it),
             baseline=it.properties.get("s2:processing_baseline"),
             generation_time=it.properties.get("s2:generation_time"),
             payload=it,
@@ -247,6 +279,7 @@ def _build_provenance(provider_name: str, item, spec: SensorStacSpec) -> Acquisi
         extra = {
             "datatake_id": props.get("s2:datatake_id"),
             "grid_code": props.get("grid:code"),
+            "mgrs_tile": _s2_mgrs_tile(item),
             "granule_id": props.get("s2:granule_id"),
             # The reflectance offset this item's DN need (see
             # item_sr_scale_offset) -- recorded because it varies by item.

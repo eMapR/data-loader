@@ -1,6 +1,21 @@
 # Changelog
 
-## 1.0.0 (unreleased)
+## 1.1.0 (unreleased)
+
+### Fixed
+- **Sentinel-2 scenes dropped on Planetary Computer.** Processing-version
+  de-duplication keyed each acquisition by datatake + MGRS tile, but read
+  the tile only from `grid:code`/`mgrs:grid_square`, which Planetary
+  Computer items don't have (`s2:mgrs_tile`). Every tile of one overpass
+  fell into one group: for an AOI spanning two tiles, half the scenes were
+  dropped and listed as excluded processing versions, or the run failed on
+  an unresolvable tie. The tile now comes from `s2:mgrs_tile`, `grid:code`,
+  the split `mgrs:*` fields or the product id; an item whose tile or
+  datatake can't be determined is never grouped with others. Earth Search
+  was not affected (it has `grid:code`). Provenance `extra.mgrs_tile` is
+  recorded for every Sentinel-2 item.
+
+## 1.0.0 (2026-10-07)
 
 First stable release for use by other eMapR pipelines. The config schema
 (`version: 1`) and the output manifest (`dataloader-manifest` 1.0) are the

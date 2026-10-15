@@ -259,15 +259,17 @@ class StacProvenanceTests(unittest.TestCase):
     def test_s2_stable_key_strips_baseline_suffix(self):
         from data_loader.providers.stac_common import _s2_stable_key
 
-        old = {"s2:datatake_id": "GS2A_20200719T190921_026508_N02.14", "grid:code": "MGRS-10TDR"}
-        new = {"s2:datatake_id": "GS2A_20200719T190921_026508_N05.00", "grid:code": "MGRS-10TDR"}
+        dt = datetime(2020, 7, 19, 19, 9, 21, tzinfo=timezone.utc)
+        old = _FakeItem("a", {"s2:datatake_id": "GS2A_20200719T190921_026508_N02.14", "grid:code": "MGRS-10TDR"}, dt)
+        new = _FakeItem("b", {"s2:datatake_id": "GS2A_20200719T190921_026508_N05.00", "grid:code": "MGRS-10TDR"}, dt)
         self.assertEqual(_s2_stable_key(old), _s2_stable_key(new))
 
     def test_s2_stable_key_distinguishes_different_tiles(self):
         from data_loader.providers.stac_common import _s2_stable_key
 
-        a = {"s2:datatake_id": "GS2A_20200719T190921_026508_N02.14", "grid:code": "MGRS-10TDR"}
-        b = {"s2:datatake_id": "GS2A_20200719T190921_026508_N02.14", "grid:code": "MGRS-10TDS"}
+        dt = datetime(2020, 7, 19, 19, 9, 21, tzinfo=timezone.utc)
+        a = _FakeItem("a", {"s2:datatake_id": "GS2A_20200719T190921_026508_N02.14", "grid:code": "MGRS-10TDR"}, dt)
+        b = _FakeItem("b", {"s2:datatake_id": "GS2A_20200719T190921_026508_N02.14", "grid:code": "MGRS-10TDS"}, dt)
         self.assertNotEqual(_s2_stable_key(a), _s2_stable_key(b))
 
     def test_provenance_preserves_full_timestamp_and_baseline(self):
