@@ -415,6 +415,23 @@ Prepared for hand-off to other eMapR pipelines. The benchmark harness that built
 - ARD discovery handles are compact (`usgs_ard.CompactItem`: properties + zlib-compressed verbatim record): a full ARD STAC item is ~85 KB as a dict and ~140 KB as a `pystac.Item`, ~12 GB for Oregon's 89k observations held through a run.
 - Planned next: vector AOIs; Sentinel-2 direct from the Copernicus Data Space Ecosystem.
 
+### Sentinel-2 L2A from the Copernicus Data Space Ecosystem: read test (2026-10-12)
+
+CDSE's STAC (`https://stac.dataspace.copernicus.eu/v1`, collection `sentinel-2-l2a`) is searchable anonymously, but the pixels are ESA's per-band JP2 files inside the .SAFE on `s3://eodata` (anonymous read: 403; needs CDSE S3 keys) or behind an OData download (needs an OIDC token). Not COGs. The catalog is ESA Collection 1 (baselines 05.00-05.12; every item needs offset −0.1), with different property names from PC/Earth Search (`processing:version`, not `s2:processing_baseline` -- `item_sr_scale_offset` would give pre-2022 CDSE items offset 0 if not mapped). Free-account quotas: 4 concurrent connections, ~20 MB/s each, 12 TB/month before throttling.
+
+`bench/cdse_read_bench.py`, tile 10TDQ, two clear 2024 scenes, B04_10m + B11_20m + SCL_20m, seconds per scene for all three bands (summary: [`benchmarks/data/cdse_read_bench.json`](benchmarks/data/cdse_read_bench.json)):
+
+| Read | 1 km window | 10 km | full tile |
+|---|---|---|---|
+| PC COG, windowed `/vsicurl` | 4.6-5.1 | 8.7-18.7 | 653-734 |
+| CDSE JP2, windowed `/vsis3`, GDAL defaults | 46-49 (~220 GETs) | 47-49 | 101-108 (~600 GETs) |
+| CDSE JP2, windowed, 10 MB curl chunks + VSI cache | 17 | 25-28 | 37-40 |
+| CDSE JP2, whole file, one GET per band | 12 | 12-14 | 20-21 (118 MB) |
+
+- Windowed JP2 reads from Oregon pay transatlantic latency on hundreds of small range requests even for a 1 km window; fetching each band file whole costs a fixed ~12-21 s per scene for these three bands. A CDSE provider should fetch whole files, as `usgs_ard` does for native-grid reads.
+- PC's full-tile time (~0.25 MB/s) is far below its usual throughput and was not re-checked; treat it as an outlier, not a PC characteristic.
+- **Same baseline is not the same product.** 2024-08-29 was the identical product on both catalogs (05.11, same processing time): DN bit-identical. 2024-07-10 was 05.10 on both but processed at different times (CDSE `..._20240710T231528`, PC `..._20240711T002732`): SR DN differ on ~95% of pixels (B04 mean +1.4 DN, B11 mean +15 DN, max |Δ| 929), SCL essentially equal. Provenance must record the full product name, not just the baseline.
+
 ## Scaling limitations identified
 
 **Fundamental / external (not something DataLoader controls):**

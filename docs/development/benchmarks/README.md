@@ -41,6 +41,7 @@ this page is the index.
 | LandTrendr-ready pipeline, 8 tiles (smoke, 2026-09-28) | `landtrendr_ready_bench.py --aoi-preset 8tile --sample-dates 6` | Does PC's per-unit cost keep growing at a 41 Mpx window? What would the full run cost? | Inconclusive: ARD 71 s/unit mean (57 median) vs. PC 108 (45), very wide ranges; projected full run ARD ~7.1 h, PC ~5.0 h. |
 | Complete ARD tile history, h003v004 (2026-10-02..04) | `ard_tile_history_bench.py` + `configs/ard_tile_history_h003v004.yaml` | What does a tile's entire 1990–2026 Landsat history cost, direct from USGS? | 3,885/3,885 observations, 14.8 h at 4 workers, 523 GB transferred, 189 GB as uint16. ~1/3 of observations are edge slivers a center-AOI search misses. [`data/ard_tile_history_h003v004.json`](data/ard_tile_history_h003v004.json) |
 | Oregon ARD estimate (2026-10-04) | `oregon_ard_estimate.py` | All 23 ARD tiles touching Oregon? | ~88,900 observations, ~11.4 TB transfer, ~4.1 TB stored (masked, no QA), ~14.5 days at 4 workers on one M2M account. [`data/oregon_ard_estimate.json`](data/oregon_ard_estimate.json) |
+| CDSE Sentinel-2 read path (2026-10-12) | `cdse_read_bench.py` | Can ESA's JP2 files on CDSE S3 be read fast enough from Oregon, and do they match PC? | Only whole-file: 12-21 s/scene for 3 bands vs 46-108 s windowed. DN identical to PC when the product (incl. processing time) is identical. [`data/cdse_read_bench.json`](data/cdse_read_bench.json) |
 
 ### LandTrendr-ready scaling summary
 
@@ -66,7 +67,8 @@ python bench/summarize_landtrendr.py                                # refresh da
 ```
 
 `usgs_ard` needs `USGS_M2M_USERNAME` / `USGS_M2M_TOKEN` in the environment
-(see `.env.example`). Planetary Computer needs no credentials.
+(see `.env.example`). `cdse_read_bench.py` needs CDSE S3 keys in
+`CDSE_S3_ACCESS_KEY` / `CDSE_S3_SECRET_KEY`. Planetary Computer needs no credentials.
 
 ![Per-unit read cost vs. AOI window size](../figures/landtrendr_per_unit_vs_window.png)
 
