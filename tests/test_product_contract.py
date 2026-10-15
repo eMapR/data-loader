@@ -108,10 +108,18 @@ class CapabilityMatchingTests(unittest.TestCase):
 
 
 class ResolveContractTests(unittest.TestCase):
-    def test_default_none_accepts_whatever_provider_supplies(self):
-        identity = ProductIdentity("landsat", GLAD_ARD, FIXED_COMPOSITE)
-        contract = resolve_contract("landsat", identity, None, "any")
-        self.assertEqual(contract.product_family, GLAD_ARD)
+    def test_default_none_accepts_a_source_product(self):
+        for fam in (USGS_C2_L2, "usgs_ard_sr", "esa_s2_l2a"):
+            identity = ProductIdentity("landsat", fam, SCENE)
+            self.assertEqual(resolve_contract("landsat", identity, None, "any").product_family, fam)
+
+    def test_default_none_refuses_a_derived_product(self):
+        for identity in (ProductIdentity("landsat", GLAD_ARD, FIXED_COMPOSITE),
+                         ProductIdentity("sentinel2", "esa_s2_l2a_harmonized", SCENE)):
+            with self.assertRaisesRegex(ValueError, "not the agency's source product.*product_family"):
+                resolve_contract(identity.sensor, identity, None, "any")
+            explicit = resolve_contract(identity.sensor, identity, identity.product_family, "any")
+            self.assertEqual(explicit.product_family, identity.product_family)
 
     def test_mismatched_explicit_request_is_rejected(self):
         identity = ProductIdentity("landsat", GLAD_ARD, FIXED_COMPOSITE)

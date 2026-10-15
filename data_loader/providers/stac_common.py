@@ -26,6 +26,7 @@ from data_loader.product_contract import (
     AcquisitionProvenance,
     ProductIdentity,
     VersionCandidate,
+    parse_version_policy,
     select_processing_versions,
 )
 from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef, redact_urls
@@ -365,6 +366,12 @@ class StacProvider:
             for sensor, spec in self.config.sensors.items()
         }
 
+    def selects_processing_versions(self, sensor: str) -> bool:
+        """Can this provider choose between processing versions of one
+        acquisition (processing_version_policy pinned:/latest)?"""
+        spec = self.config.sensors.get(sensor)
+        return spec is not None and spec.product_family == ESA_S2_L2A
+
     def processing_profile(self, sensor: str) -> dict:
         spec = self.config.sensors[sensor]
         return {
@@ -441,6 +448,9 @@ class StacProvider:
         processing_version_policy="any",
     ) -> list[SceneRef]:
         spec = self.config.sensors[sensor]
+        if parse_version_policy(processing_version_policy)[0] == "pinned" and not self.selects_processing_versions(sensor):
+            raise ValueError(f"[{self.name}] processing_version_policy {processing_version_policy!r}: {sensor} on "
+                             "this provider has no processing versions to choose from")
         if spec.requires_aws_credentials and not _has_aws_credentials():
             raise RuntimeError(
                 f"[{self.name}] sensor {sensor!r} reads from a Requester "

@@ -18,6 +18,24 @@
   `NaN` float32), matching the GeoTIFF; 1.0 said `null`.
 - Error messages no longer show `?<redacted><redacted>`.
 
+### Product consistency
+- A sensor without `product_family` resolves to the provider's product only
+  if that is an agency source product (`usgs_ard_sr`, `usgs_c2_l2`,
+  `esa_s2_l2a`) delivered as scenes. Derived products (`glad_ard`'s
+  normalized 16-day composites, GEE's `esa_s2_l2a_harmonized`) must be
+  named explicitly; before, switching `provider:` could substitute them
+  silently. **Configs using `glad_ard`, or `gee` for Sentinel-2, must add
+  `product_family`.**
+- The recorded request (manifest `request`, `request.yaml`) names each
+  sensor's resolved `product_family`. Datasets recorded with
+  `product_family: null` resume with it pinned or unpinned.
+- `processing_version_policy: pinned:...` is checked by `validate`/`plan`:
+  a provider/sensor with no processing versions (every Landsat source) is
+  a config error. Planetary Computer and Earth Search Landsat used to
+  accept and ignore it.
+- All examples pin `product_family`; the docs recommend it for every
+  pipeline config.
+
 ### Output contract: manifest schema 1.1 (additive)
 - `files[].bandScaleOffset` is written for **every** band of every
   `bands` file (1.0 wrote it only when it differed from `bandSets`) and is

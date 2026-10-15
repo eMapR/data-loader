@@ -4,6 +4,7 @@ version: 1
 provider: aws_earth_search             # or planetary_computer
 sensors:
   - name: sentinel2
+    product_family: esa_s2_l2a
     processing_version_policy: latest  # Earth Search can list two processing versions of one acquisition
 
 aoi:

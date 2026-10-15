@@ -3,7 +3,9 @@
 #   data-loader run examples/seasonal_composite.yaml
 version: 1
 provider: planetary_computer
-sensors: [landsat]
+sensors:
+  - name: landsat
+    product_family: usgs_c2_l2         # fail rather than accept a different product
 
 aoi:
   upper_left: [-122.4327, 44.2860]

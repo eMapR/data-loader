@@ -91,6 +91,18 @@ def _diff_keys(a, b, prefix="") -> list[str]:
     return [] if a == b else [prefix]
 
 
+def _resolved_request(manifest: dict, request: Optional[dict] = None) -> dict:
+    """`request` (default: the manifest's own) with each sensor's
+    product_family taken from the manifest's `products` where it is unset
+    (1.0 recorded the config as written; 1.1 records the resolved family)."""
+    req = json.loads(json.dumps(manifest.get("request", {}) if request is None else request))
+    products = manifest.get("products", {})
+    for sd in req.get("sensors", []):
+        if isinstance(sd, dict) and sd.get("product_family") is None:
+            sd["product_family"] = products.get(sd.get("name"), {}).get("productFamily")
+    return req
+
+
 class DatasetWriter:
     def __init__(self, root, request: dict):
         self.root = Path(root)
@@ -123,7 +135,8 @@ class DatasetWriter:
                 self.close()
                 raise DatasetError(f"{self.root}: manifest schema {old.get('schemaVersion')} was written by an "
                                    f"incompatible DataLoader (this one writes {MANIFEST_VERSION}); not modifying it")
-            diff = _diff_keys(request_identity(old.get("request", {})), request_identity(request))
+            diff = _diff_keys(request_identity(_resolved_request(old)),
+                              request_identity(_resolved_request(old, request)))
             if diff:
                 self.close()
                 raise DatasetError(

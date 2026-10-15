@@ -28,7 +28,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from data_loader.dataset import MANIFEST_VERSION, DatasetError, DatasetWriter, _major, _now, open_dataset
+from data_loader.dataset import (MANIFEST_VERSION, DatasetError, DatasetWriter, _major, _now, _resolved_request,
+                                  open_dataset)
 
 ATTRIBUTED_BY = "data-loader upgrade, from run start times"
 
@@ -169,7 +170,8 @@ def upgrade_dataset(root, *, runs: Optional[list] = None, dry_run: bool = False,
     runs = sorted(({**r, "dataloaderVersion": r.get("dataloaderVersion") or old_version} for r in runs or []),
                   key=lambda r: _parse_time(r["started"]))
 
-    writer = None if dry_run else DatasetWriter(root, manifest.get("request", {}))  # takes the lock
+    request = _resolved_request(manifest)  # 1.1 records each sensor's resolved product_family
+    writer = None if dry_run else DatasetWriter(root, request)  # takes the lock
     try:
         rows = list(writer._rows.values()) if writer else list(open_dataset(root)._rows().values())
         _upgrade_manifest(manifest, report)
@@ -180,7 +182,8 @@ def upgrade_dataset(root, *, runs: Optional[list] = None, dry_run: bool = False,
         if writer is None:
             return report
         changed = (version != MANIFEST_VERSION or report.files_scale_offset_added or report.qa_nodata_set
-                   or report.rows_software_attributed or report.errors_cleaned)
+                   or report.rows_software_attributed or report.errors_cleaned
+                   or request != manifest.get("request"))
         if not changed:
             return report  # already current: nothing to write
         if report.check_problems:
@@ -196,6 +199,7 @@ def upgrade_dataset(root, *, runs: Optional[list] = None, dry_run: bool = False,
         from data_loader.engine import software_info
 
         core = {k: v for k, v in manifest.items() if k not in ("schema", "schemaVersion", "items")}
+        core["request"] = request
         core["dataset"] = {k: v for k, v in ds.items() if k not in ("created", "updated", "complete", "runs")}
         core["dataset"]["upgrades"] = list(ds.get("upgrades") or []) + [
             {"at": _now(), "from": version, "to": MANIFEST_VERSION, **software_info()}]

@@ -48,7 +48,7 @@ from data_loader.geotiff import sha256, write_float32, write_raster
 from data_loader.indices import compute_index, required_raw_bands
 from data_loader.masking import MASKS, QA_DESCRIPTIONS, describe_mask, dn_to_reflectance
 from data_loader.metadata_snapshot import write_snapshot
-from data_loader.product_contract import ProductContract, resolve_contract
+from data_loader.product_contract import ProductContract, parse_version_policy, resolve_contract
 from data_loader.providers import get_provider
 from data_loader.providers.base import Grid, SceneRef, SystemicError, redact_urls
 
@@ -170,7 +170,13 @@ def check_request(config: Config, provider=None) -> list[str]:
     return warnings (e.g. missing read credentials). No network access."""
     provider = provider or make_provider(config)
     for s in config.sensors:
-        _resolve_contract(provider, s)
+        contract = _resolve_contract(provider, s)
+        kind, _ = parse_version_policy(contract.processing_version_policy)
+        selects = getattr(provider, "selects_processing_versions", None)
+        if kind == "pinned" and not (callable(selects) and selects(s.name)):
+            raise ConfigError(f"sensors[{s.name}].processing_version_policy {contract.processing_version_policy!r}: "
+                              f"provider {provider.name!r} has no processing versions to choose from for "
+                              f"{s.name}; use any")
     if (config.output.encoding == "native" or config.output.qa_band) and not _supports_native(provider):
         what = "output.encoding: native" if config.output.encoding == "native" else "output.qa_band"
         raise ConfigError(f"{what}: provider {provider.name!r} can't return source values/QA; "
@@ -187,6 +193,16 @@ def check_request(config: Config, provider=None) -> list[str]:
                 raise ConfigError(f"aoi.tiles: {e}") from None
     check = getattr(provider, "credential_problems", None)
     return list(check([s.name for s in config.sensors])) if callable(check) else []
+
+
+def recorded_request(config: Config, provider) -> dict:
+    """config.to_dict() with each sensor's product_family resolved, so the
+    recorded request (manifest, request.yaml) names the product even when
+    the config left it to the provider."""
+    d = config.to_dict()
+    for spec, sd in zip(config.sensors, d["sensors"]):
+        sd["product_family"] = _resolve_contract(provider, spec).product_family
+    return d
 
 
 # -- discovery ------------------------------------------------------------------
@@ -576,7 +592,7 @@ def manifest_core(plan: Plan, provider, grid_infos: dict, software: Optional[dic
     profile = getattr(provider, "processing_profile", None)
     return {
         "dataset": dict(software),
-        "request": cfg.to_dict(),
+        "request": recorded_request(cfg, provider),
         "products": {sp.sensor: {"sensor": sp.sensor, "provider": cfg.provider,
                                  "productFamily": sp.contract.product_family,
                                  "temporalProduct": sp.contract.temporal_product,
@@ -622,7 +638,7 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
     if problems:
         raise ConfigError("cannot read from this provider yet:\n  " + "\n  ".join(problems))
     root = Path(config.output.dir)
-    writer = DatasetWriter(root, config.to_dict())
+    writer = DatasetWriter(root, recorded_request(config, provider))
     try:
         for tmp in root.glob("*/*/*/*.tif.tmp"):  # files a killed run was writing
             tmp.unlink()

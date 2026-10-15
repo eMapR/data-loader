@@ -4,7 +4,9 @@
 #   data-loader run examples/usgs_ard_aoi.yaml
 version: 1
 provider: usgs_ard
-sensors: [landsat]
+sensors:
+  - name: landsat
+    product_family: usgs_ard_sr        # fail rather than accept a different product
 
 aoi:
   upper_left: [-122.4327, 44.2860]

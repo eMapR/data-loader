@@ -7,7 +7,9 @@
 #   data-loader run  examples/oregon_landsat_ard_archive.yaml --output-dir /big/disk/oregon_landsat_ard
 version: 1
 provider: usgs_ard
-sensors: [landsat]
+sensors:
+  - name: landsat
+    product_family: usgs_ard_sr        # fail rather than accept a different product
 
 aoi:
   tiles:                               # ordered by share of Oregon (bench/oregon_ard_estimate.py)

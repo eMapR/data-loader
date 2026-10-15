@@ -63,15 +63,34 @@ provider_options: {}             # provider-specific extras, e.g. {gee_project: 
 ## `provider` and `sensors`
 
 `provider` chooses where the data comes from. See [providers](providers.md)
-for what each one serves. Each sensor resolves to a **product family**
-(e.g. `usgs_ard_sr` for USGS Landsat ARD, `usgs_c2_l2` for Landsat
-Collection 2 Level-2 scenes, `esa_s2_l2a` for Sentinel-2 L2A). Set
-`product_family` to pin it: if the provider supplies something else, the
-run fails before downloading anything.
+for what each one serves. Each sensor resolves to a **product family**:
+
+| `product_family` | Product | Providers |
+|---|---|---|
+| `usgs_ard_sr` | USGS Landsat C2 U.S. ARD surface reflectance, fixed Albers tiles | `usgs_ard` |
+| `usgs_c2_l2` | USGS Landsat C2 Level-2 surface reflectance, per-scene UTM | `planetary_computer`, `aws_earth_search`, `gee`, `usgs_m2m` |
+| `esa_s2_l2a` | ESA Sentinel-2 L2A as ESA distributes it | `planetary_computer`, `aws_earth_search` |
+| `esa_s2_l2a_harmonized` | Google's harmonized Sentinel-2 L2A | `gee` |
+| `glad_ard` | UMD GLAD normalized 16-day Landsat composites | `glad_ard` |
+
+**Pin `product_family` in every pipeline config.** Then switching
+`provider:` can only change where the same product comes from: a provider
+that supplies anything else fails before downloading. Left unset, the
+provider's product is accepted only if it is one of the agency source
+products (`usgs_ard_sr`, `usgs_c2_l2`, `esa_s2_l2a`); a derived product
+(`glad_ard`, `esa_s2_l2a_harmonized`) must always be named. Note that
+`usgs_ard_sr` and `usgs_c2_l2` are the same USGS surface reflectance on
+different grids, so an unpinned Landsat config switched from `usgs_ard` to
+`planetary_computer` changes the product. Either way, the resolved family
+is recorded in the manifest's `request` and `products`. A dataset written
+before 1.1 with no `product_family` can be resumed with it pinned to the
+family its manifest records.
 
 `processing_version_policy` matters only where one acquisition can exist
 in more than one ESA processing version. Today that's Sentinel-2 on
-Earth Search, which lists both originals and reprocessed copies.
+Earth Search, which lists both originals and reprocessed copies. A
+`pinned:` policy for a provider/sensor without processing versions (any
+Landsat source) is a config error.
 
 | Value | Behavior |
 |---|---|

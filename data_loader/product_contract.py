@@ -43,6 +43,20 @@ USGS_ARD_SR = "usgs_ard_sr"
 
 PRODUCT_FAMILIES = frozenset({USGS_C2_L2, ESA_S2_L2A, ESA_S2_L2A_HARMONIZED, GLAD_ARD, USGS_ARD_SR})
 
+# Agency surface-reflectance products as the agency distributes them. A
+# request that doesn't name a product_family may resolve to one of these;
+# anything else (re-normalized, harmonized, composited by a third party)
+# changes the numbers and must be asked for by name.
+SOURCE_FAMILIES = frozenset({USGS_C2_L2, USGS_ARD_SR, ESA_S2_L2A})
+
+DESCRIPTIONS = {
+    USGS_C2_L2: "USGS Landsat Collection 2 Level-2 surface reflectance, per-scene UTM",
+    USGS_ARD_SR: "USGS Landsat Collection 2 U.S. ARD surface reflectance, fixed Albers tiles",
+    ESA_S2_L2A: "ESA Sentinel-2 Level-2A surface reflectance (as ESA distributes it)",
+    ESA_S2_L2A_HARMONIZED: "Google Earth Engine's harmonized Sentinel-2 L2A (baseline offset removed by Google)",
+    GLAD_ARD: "UMD GLAD Landsat ARD: normalized 16-day composites",
+}
+
 SCENE = "scene"
 FIXED_COMPOSITE = "fixed_composite"
 
@@ -118,8 +132,9 @@ def resolve_contract(
 ) -> ProductContract:
     """Resolve a sensor's request against what its provider actually
     supplies. `requested_product_family=None` means "no explicit request
-    was made -- accept whatever this provider naturally supplies" (the
-    backward-compatible default for existing configs). An explicit,
+    was made": accepted only when the provider supplies an agency source
+    product (SOURCE_FAMILIES) as scenes; a derived product (normalized,
+    harmonized, composited) must be named explicitly. An explicit,
     mismatched request raises: substituting one product family for another
     is exactly the silent-mixing failure mode this module exists to
     prevent, so it is never done quietly."""
@@ -127,6 +142,14 @@ def resolve_contract(
         raise ValueError(
             f"internal error: capability lookup for sensor {sensor!r} "
             f"returned an identity for sensor {identity.sensor!r}"
+        )
+    if requested_product_family is None and (identity.product_family not in SOURCE_FAMILIES
+                                             or identity.temporal_product != SCENE):
+        raise ValueError(
+            f"sensor {sensor!r}: this provider supplies {identity.product_family!r} "
+            f"({DESCRIPTIONS.get(identity.product_family, identity.product_family)}), which is not the "
+            f"agency's source product -- its values differ from it. Set "
+            f"product_family: {identity.product_family} for this sensor to request it explicitly."
         )
     resolved_family = requested_product_family or identity.product_family
     if resolved_family != identity.product_family:

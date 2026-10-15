@@ -295,6 +295,9 @@ class GeeProvider:
             for sensor, spec in SENSORS.items()
         }
 
+    def selects_processing_versions(self, sensor: str) -> bool:
+        return sensor == "sentinel2"  # baseline metadata exists for S2 only
+
     def processing_profile(self, sensor: str) -> dict:
         spec = SENSORS[sensor]
         return {
