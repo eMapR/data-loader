@@ -432,6 +432,43 @@ CDSE's STAC (`https://stac.dataspace.copernicus.eu/v1`, collection `sentinel-2-l
 - PC's full-tile time (~0.25 MB/s) is far below its usual throughput and was not re-checked; treat it as an outlier, not a PC characteristic.
 - **Same baseline is not the same product.** 2024-08-29 was the identical product on both catalogs (05.11, same processing time): DN bit-identical. 2024-07-10 was 05.10 on both but processed at different times (CDSE `..._20240710T231528`, PC `..._20240711T002732`): SR DN differ on ~95% of pixels (B04 mean +1.4 DN, B11 mean +15 DN, max |Δ| 929), SCL essentially equal. Provenance must record the full product name, not just the baseline.
 
+### Stabilization audit and 1.1 (2026-10-15)
+
+A full read-only audit of 1.0 (`cd6354e`) before further features; the
+findings, fixes and open items are in [AUDIT_2026-10.md](AUDIT_2026-10.md).
+Measured facts worth keeping:
+
+- **Sentinel-2 de-duplication dropped Planetary Computer scenes.** The
+  acquisition key read the MGRS tile from `grid:code`/`mgrs:grid_square`;
+  PC has `s2:mgrs_tile`. On real PC items over 10TDP/10TEP (July 2019 and
+  July 2022) the old code kept 6 of 12 scenes and recorded the rest as
+  excluded processing versions; where both tiles share a generation time it
+  fails on a tie. Earth Search's `mgrs:grid_square` alone ("DP") is also
+  ambiguous. Fixed; regression tests use trimmed real items
+  (`tests/fixtures/sentinel2/`).
+- **Oregon memory.** The production run (4 workers) peaked at 62 GB
+  (VmHWM; 34 GB resident at day 7.5; 251 GB machine). An offline replay of
+  the exact usgs_ard path (`bench/download_memory_bench.py`: real ARD band
+  files over local HTTP, whole-file download, GDAL decode, multi-threaded
+  GeoTIFF write) stayed at 3.3-3.8 GB over 150-200 observations, with or
+  without injected download failures and with or without releasing failed
+  futures, with a slow drift of about 1-2 MB per observation. Not
+  reproduced; candidates are the drift accumulated over 72k observations
+  and allocator fragmentation under 504 storms. Progress lines now log
+  RSS; a 2,000+ observation replay is the next step.
+- **Oregon throughput and storage (1.0, measured):** 8.8 s per
+  observation effective at 4 workers; full observations 129 MB stored,
+  slivers 15 MB; projected ~8.3 TB and ~9-10 days for 88.9k observations
+  (docs said 5-6 TB, 3-4 weeks). 2.6% of attempts failed (almost all
+  per-file 504s from landsatlook.usgs.gov after 4 tries); 99.8% of those
+  succeeded in the in-run retry passes.
+- **Backward compatibility:** a copy of the live Oregon metadata (88,932
+  rows) upgraded to schema 1.1 in 12.6 s / 1.2 GB; counts unchanged; all
+  75,907 acquired files given per-band scale/offset; rows attributed to
+  `1f14cda` (3,449, first run) and `5fd1970` (72,458); 20 sampled files'
+  GDAL scale/offset/nodata matched the upgraded metadata; `plan` with the
+  pinned example matched every acquired key.
+
 ## Scaling limitations identified
 
 **Fundamental / external (not something DataLoader controls):**

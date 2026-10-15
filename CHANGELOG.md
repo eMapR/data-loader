@@ -2,6 +2,12 @@
 
 ## 1.1.0 (unreleased)
 
+Stabilization after the October 2026 audit
+([docs/development/AUDIT_2026-10.md](docs/development/AUDIT_2026-10.md)).
+Manifest schema 1.1 is additive; 1.0 datasets are read and resumed as is.
+Config changes: see *Provider options and credentials* and *Product
+consistency* below.
+
 ### Fixed
 - **Sentinel-2 scenes dropped on Planetary Computer.** Processing-version
   de-duplication keyed each acquisition by datatake + MGRS tile, but read

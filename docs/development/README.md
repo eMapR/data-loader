@@ -104,6 +104,8 @@ grid, and the CLI.
 
 ## Benchmarks and history
 
+- [`AUDIT_2026-10.md`](AUDIT_2026-10.md): the October 2026 audit of 1.0,
+  what 1.1 fixed, what is open, and the Oregon archive migration plan.
 - [`DATALOADER_DEVELOPMENT_REPORT.md`](DATALOADER_DEVELOPMENT_REPORT.md) is
   the narrative record: correctness bugs found and fixed, provider
   equivalence checks, performance findings, why USGS ARD was chosen, the
