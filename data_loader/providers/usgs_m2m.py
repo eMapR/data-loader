@@ -3,10 +3,9 @@ Level-2 only (Sentinel-2 isn't USGS-distributed, so `sensor="sentinel2"`
 raises).
 
 Needs a free EROS account (https://ers.cr.usgs.gov/register) and an M2M
-application token generated from your EROS profile page. Pass credentials
-as `provider_options: {usgs_username: "...", usgs_token: "..."}` in the
-run config, or set USGS_M2M_USERNAME / USGS_M2M_TOKEN env vars (preferred
-— keeps credentials out of the config file).
+application token generated from your EROS profile page, in the
+USGS_M2M_USERNAME / USGS_M2M_TOKEN environment variables (never in the
+config file).
 
 Structurally different from the STAC providers: M2M doesn't serve
 individual band COGs over range requests. Reading a scene means
@@ -37,6 +36,7 @@ import numpy as np
 
 from data_loader.masking import landsat_qa_mask
 from data_loader.product_contract import SCENE, USGS_C2_L2, AcquisitionProvenance, ProductIdentity, parse_version_policy
+from data_loader.providers.base import SystemicError
 from data_loader.providers.base import Grid, SceneRef
 from data_loader.providers.gee import LANDSAT_OLI_BANDS, LANDSAT_TM_ETM_BANDS
 
@@ -118,10 +118,9 @@ class UsgsM2mProvider:
         if self._session is not None and time.time() - self._session_born < RELOGIN_AFTER:
             return
         if not self.username or not self.token:
-            raise ValueError(
-                "usgs_m2m needs credentials — pass provider_options: "
-                "{usgs_username: \"...\", usgs_token: \"...\"} in the config, "
-                "or set USGS_M2M_USERNAME / USGS_M2M_TOKEN env vars. "
+            raise SystemicError(
+                "usgs_m2m needs credentials: "
+                "set USGS_M2M_USERNAME / USGS_M2M_TOKEN env vars. "
                 "Generate a token from your EROS profile page "
                 "(https://ers.cr.usgs.gov)."
             )
@@ -340,5 +339,11 @@ class UsgsM2mProvider:
         return out
 
 
-def make_provider(usgs_username: Optional[str] = None, usgs_token: Optional[str] = None, **kwargs) -> UsgsM2mProvider:
-    return UsgsM2mProvider(username=usgs_username, token=usgs_token)
+def make_provider(**provider_options) -> UsgsM2mProvider:
+    """No provider_options; credentials only from the environment."""
+    if {"usgs_username", "usgs_token"} & set(provider_options):
+        raise ValueError("usgs_m2m: credentials are not accepted in provider_options; set USGS_M2M_USERNAME "
+                         "and USGS_M2M_TOKEN in the environment (see docs/getting-started.md)")
+    if provider_options:
+        raise ValueError(f"usgs_m2m takes no provider_options (got {', '.join(sorted(provider_options))})")
+    return UsgsM2mProvider()

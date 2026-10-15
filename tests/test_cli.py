@@ -71,6 +71,23 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("matches its sha256", out)
 
+    def test_verify_detects_a_changed_file_exit_4(self):
+        p = FakeProvider(july(2))
+        with patch("data_loader.engine.get_provider", return_value=p):
+            self.assertEqual(_cli("run", str(self.cfg))[0], 0)
+        tif = sorted((self.dir / "out").rglob("*.tif"))[0]
+        with open(tif, "r+b") as f:  # same size, different bytes
+            f.seek(300)
+            f.write(b"\x00\x01\x02")
+        code, out, _ = _cli("verify", str(self.dir / "out"))
+        self.assertEqual(code, 4)
+        self.assertIn("checksum mismatch", out)
+        self.assertEqual(_cli("verify", str(self.dir / "out"), "--no-checksums")[0], 0)
+        tif.unlink()
+        code, out, _ = _cli("verify", str(self.dir / "out"), "--no-checksums")
+        self.assertEqual(code, 4)
+        self.assertIn("missing", out)
+
     def test_run_with_failures_exit_3(self):
         p = FakeProvider(july(2), fail={"scene-1": -1})
         with patch("data_loader.engine.get_provider", return_value=p):

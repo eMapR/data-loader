@@ -939,3 +939,148 @@ class KeepQaTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NativeReadIntegrityTests(NativeTileReadTests):
+    """read_scene_native, the path every usgs_ard archive uses: each band
+    file is checked against the STAC item's file:checksum (SHA-512
+    multihash), a connection dropped mid-body is retried, and the tile's
+    signed URLs are dropped afterwards."""
+
+    def _with_checksums(self, scene, files):
+        import hashlib
+        item = scene.handle
+        item.assets = {
+            "blue": pystac.Asset(href=f"https://landsatlook.usgs.gov/tile/x/{TILE_ID}_SR_B2.TIF",
+                                 extra_fields={"file:checksum": "1340" + hashlib.sha512(files["band"]).hexdigest()}),
+            "qa_pixel": pystac.Asset(href=f"https://landsatlook.usgs.gov/tile/x/{TILE_ID}_QA_PIXEL.TIF",
+                                     extra_fields={"file:checksum": "1340" + hashlib.sha512(files["qa"]).hexdigest()}),
+        }
+        return scene
+
+    def _native_read(self, scene, grid, get, retries=4):
+        provider = UsgsArdProvider(username="u", token="t", retries=retries)
+        fake_urls = lambda tile_id, suffixes: {s: f"https://signed/{tile_id}_{s}.TIF?sig=1" for s in suffixes}
+        with patch.object(UsgsArdProvider, "_signed_band_urls", side_effect=fake_urls), \
+             patch("requests.get", side_effect=get) as req, patch("time.sleep"):
+            nr = provider.read_scene_native(scene, "landsat", ["blue"], grid, True)
+        return nr, req, provider
+
+    def test_files_verified_and_reported(self):
+        scene, grid = self._native()
+        files = self._files(grid.transform)
+        scene = self._with_checksums(scene, files)
+        nr, req, provider = self._native_read(scene, grid, lambda url, timeout: self._response(
+            200, files["qa" if "QA_PIXEL" in url else "band"]))
+        self.assertEqual(nr.integrity["files"], 2)
+        self.assertEqual(int(nr.bands["blue"][1, 1]), 10000)
+        self.assertEqual(int(nr.qa[0, 0]), 1 << 3)
+        self.assertEqual((nr.scale["blue"], nr.offset["blue"], nr.nodata), (2.75e-5, -0.2, 0))
+        self.assertEqual(provider._signed_url_cache, {})
+        self.assertEqual(provider._tile_locks, {})
+
+    def test_corrupt_download_is_fetched_again(self):
+        scene, grid = self._native()
+        files = self._files(grid.transform)
+        scene = self._with_checksums(scene, files)
+        calls = []
+
+        def get(url, timeout):
+            calls.append(url)
+            body = files["qa" if "QA_PIXEL" in url else "band"]
+            if "SR_B2" in url and calls.count(url) == 1:
+                body = body[:-1] + b"\x00"  # same length, one byte wrong
+            return self._response(200, body)
+
+        nr, req, _ = self._native_read(scene, grid, get)
+        self.assertEqual(req.call_count, 3)
+        self.assertEqual(int(nr.bands["blue"][1, 1]), 10000)
+
+    def test_persistent_mismatch_fails_the_acquisition(self):
+        scene, grid = self._native()
+        files = self._files(grid.transform)
+        scene = self._with_checksums(scene, files)
+        bad = files["band"][:-1] + b"\x00"
+        with self.assertRaisesRegex(RuntimeError, "file:checksum"):
+            self._native_read(scene, grid, lambda url, timeout: self._response(
+                200, files["qa"] if "QA_PIXEL" in url else bad), retries=2)
+
+    def test_connection_dropped_mid_body_is_retried(self):
+        import requests
+        scene, grid = self._native()
+        files = self._files(grid.transform)
+        n = []
+
+        def get(url, timeout):
+            n.append(url)
+            if len(n) == 1:
+                raise requests.exceptions.ChunkedEncodingError("Connection broken: IncompleteRead")
+            return self._response(200, files["qa" if "QA_PIXEL" in url else "band"])
+
+        nr, req, _ = self._native_read(scene, grid, get)
+        self.assertEqual(req.call_count, 3)
+        self.assertIsNone(nr.integrity)  # no checksums in this item: nothing claimed
+
+    def test_multihash(self):
+        import hashlib
+        from data_loader.providers.usgs_ard import _multihash_matches
+        data = b"abc"
+        self.assertTrue(_multihash_matches(data, "1340" + hashlib.sha512(data).hexdigest()))
+        self.assertFalse(_multihash_matches(data, "1340" + hashlib.sha512(b"abd").hexdigest()))
+        self.assertTrue(_multihash_matches(data, "1220" + hashlib.sha256(data).hexdigest()))
+        self.assertTrue(_multihash_matches(data, "d50110" + "00" * 16))  # unknown algorithm: not checked
+
+
+class ProviderOptionTests(unittest.TestCase):
+    def test_unknown_options_rejected(self):
+        from data_loader.providers import usgs_ard, usgs_m2m
+        for mod in (usgs_ard, usgs_m2m):
+            with self.assertRaisesRegex(ValueError, "takes no provider_options"):
+                mod.make_provider(usgs_tokn="x")
+
+    def test_credentials_in_config_rejected(self):
+        from data_loader.providers import usgs_ard, usgs_m2m
+        for mod in (usgs_ard, usgs_m2m):
+            with self.assertRaisesRegex(ValueError, "environment"):
+                mod.make_provider(usgs_username="u", usgs_token="t")
+
+    def test_engine_reports_it_as_config_error(self):
+        from data_loader.config import ConfigError
+        from data_loader.engine import make_provider
+        from tests.fakes import make_config
+        with self.assertRaisesRegex(ConfigError, "environment"):
+            make_provider(make_config("x", provider="usgs_ard", provider_options={"usgs_token": "t"}))
+
+
+class SystemicFailureTests(unittest.TestCase):
+    def test_rejected_token_is_systemic(self):
+        from data_loader.providers.base import SystemicError
+        provider = UsgsArdProvider(username="u", token="t", retries=1)
+        resp = MagicMock(ok=False, status_code=200)
+        resp.json.return_value = {"errorCode": "AUTH_INVALID", "errorMessage": "Invalid token"}
+        with patch("requests.Session.post", return_value=resp):
+            with self.assertRaises(SystemicError):
+                provider._ensure_login()
+
+    def test_missing_credentials_is_systemic(self):
+        from data_loader.providers.base import SystemicError
+        with patch.dict("os.environ", {}, clear=True):
+            provider = UsgsArdProvider()
+        with self.assertRaises(SystemicError):
+            provider._ensure_login()
+
+    def test_html_maintenance_page_is_retried(self):
+        provider = UsgsArdProvider(username="u", token="t", retries=3)
+        html = MagicMock(ok=False, status_code=503, text="<html>maintenance</html>")
+        html.json.side_effect = ValueError("not json")
+        good = MagicMock(ok=True, status_code=200)
+        good.json.return_value = {"data": [1], "errorCode": None}
+        session = MagicMock()
+        session.post.side_effect = [html, good]
+        with patch.object(UsgsArdProvider, "_ensure_login", return_value=session), patch("time.sleep"):
+            self.assertEqual(provider._m2m_post("download-options", {}), [1])
+
+    def test_pinned_policy_rejected_for_tiles(self):
+        with self.assertRaisesRegex(ValueError, "pinned"):
+            UsgsArdProvider().search_tile("h003v004", "landsat", date(2020, 1, 1), date(2020, 2, 1),
+                                          None, "pinned:1")

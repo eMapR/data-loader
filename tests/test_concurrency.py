@@ -111,3 +111,34 @@ class CompositeConcurrencyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FailedReadReleaseTests(unittest.TestCase):
+    """A failed acquisition's data must not stay referenced until the end of
+    its pass (the 1.0 engine kept every future, and a failed future's
+    traceback kept the band files it had downloaded: 62 GB on Oregon)."""
+
+    def test_failed_future_is_released_once_handled(self):
+        import gc
+        import time
+        import weakref
+
+        class Payload:  # stands in for downloaded band data
+            pass
+
+        refs = []
+
+        class Leaky(FakeProvider):
+            def read_scene_bands(self, scene, sensor, bands, grid, pixel_cloud_mask):
+                if scene.id == "scene-0":
+                    data = Payload()  # a local of the failing frame, like the downloaded blobs
+                    refs.append(weakref.ref(data))
+                    raise RuntimeError("504 Gateway Time-out")
+                time.sleep(0.5)  # scene-0's failure gets handled meanwhile
+                gc.collect()
+                refs.append(refs[0]() is None)
+                return super().read_scene_bands(scene, sensor, bands, grid, pixel_cloud_mask)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_with(Leaky(july(2)), make_config(tmp, workers=1, max_attempts=1))
+        self.assertTrue(refs[1], "failed acquisition's data still referenced while the pass continues")

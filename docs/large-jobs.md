@@ -47,31 +47,29 @@ fetch.
 
 ### What to expect (USGS ARD, measured on eMapR's server)
 
+Measured on the Oregon archive run (DataLoader 1.0, 4 workers, one M2M
+account, October 2026; about 76,000 observations in):
+
 | | Full observation | Edge sliver (≥80% fill) |
 |---|---|---|
 | Downloaded | ~185 MB | ~16 MB |
-| Stored (uint16 + QA_PIXEL) | ~80 MB | ~6 MB |
-| Time per observation, 4 workers | ~16–24 s effective | ~10 s effective |
+| Stored (uint16 + QA_PIXEL, unmasked) | ~129 MB | ~15 MB |
+| Time per observation, 4 workers | ~8.8 s effective, all observations averaged | |
 
+- **Oregon (23 tiles, 1990 to present):** about 89,000 observations (about
+  29,000 slivers), about **9–10 days** and about **8.3 TB** stored
+  (7.5 TiB). Throughput varied from about 8,300 to 10,500 observations per
+  day with how often landsatlook.usgs.gov returned 504s.
 - **One tile, 1990 to present:** about 3,900 observations (about 1,500 of
-  them slivers). That's roughly 15–25 hours, about 0.5 TB downloaded and
-  about 0.2–0.3 TB stored.
-- **Oregon (23 tiles):** about 89,000 observations (about 29,000
-  slivers). That's roughly 3–4 weeks, about 11 TB downloaded and about
-  5–6 TB stored.
+  them slivers): roughly 9–10 hours and about 0.35 TB stored.
 
-The per-observation figures above come from the pre-1.0 benchmark
-harness, whose single-threaded GeoTIFF writes took ~16–24 s per full tile.
-DataLoader 1.0 writes the same file in ~1–3 s (multi-threaded
-compression): its first live run, 11 observations of one tile in
-July 2023 with 4 workers, averaged ~11 s per observation effective. The
-floor is set by USGS: the M2M one-call-at-a-time limit (~5 s per
+The floor is set by USGS: the M2M one-call-at-a-time limit (~5 s per
 observation), and how fast landsatlook.usgs.gov responds (it sometimes
 returns 504s, which are retried, first per file, then in retry passes
-before the run moves on to the next tile). Unmasked archives compress somewhat less well than masked
-ones. Check free space before starting (`df -h`), and leave room to
-spare. The measurements and the Oregon estimate behind these numbers are
-in [development](development/README.md).
+before the run moves on to the next tile). Unmasked archives compress
+less well than masked ones. Check free space before starting (`df -h`),
+and leave room to spare. The measurements behind these numbers are in
+[development](development/README.md).
 
 ## 2. Run, in tmux
 
@@ -90,9 +88,14 @@ hours left.
   account; a second job on the same account slows both.
 - **`workers: 4`** is a good default. M2M calls queue internally, and
   downloads and writes overlap. Going beyond about 4 gains little.
-- **Memory:** about 1–2 GB per worker for full tiles, plus about 100 KB of
-  catalog metadata per discovered observation (about 8–10 GB for all of
-  Oregon).
+- **Memory:** the working set is about 1 GB per worker for full tiles plus
+  about 25 KB per discovered observation (about 2–3 GB for all of Oregon),
+  but memory grows slowly over a long run: the Oregon run (4 workers)
+  peaked at **62 GB** after a week (34 GB resident at the time). The cause
+  is not pinned down yet (see the development report); until it is, give
+  a multi-day archive run a machine or job allocation with 64 GB or more,
+  and watch the `rss` figure in the progress log. A run can be stopped
+  (Ctrl-C) and resumed at any time, which resets memory.
 - **One directory, one run:** a lock file stops a second run from
   writing into the same directory.
 

@@ -85,6 +85,9 @@ class NativeRead:
     offset: dict  # band -> offset for THIS scene
     nodata: int
     qa: Optional[Any] = None  # raw QA array, if requested
+    # How the source files were checked on download, if they were, e.g.
+    # {"method": "sha2-512 vs STAC file:checksum", "files": 7}
+    integrity: Optional[dict] = None
 
 
 @dataclass(frozen=True)

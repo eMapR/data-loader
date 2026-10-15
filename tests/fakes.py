@@ -105,7 +105,7 @@ class FakeProvider:
         self.search_calls.append((start, end, max_cloud_percent))
         return [self._ref(s) for s in self.scenes if start <= s.date <= end]
 
-    def _search_tile(self, tile_id, sensor, start, end, max_cloud_percent=None):
+    def _search_tile(self, tile_id, sensor, start, end, max_cloud_percent=None, processing_version_policy="any"):
         self.search_calls.append((tile_id, start, end))
         return [self._ref(s) for s in self.scenes if start <= s.date <= end]
 

@@ -18,6 +18,13 @@
   `NaN` float32), matching the GeoTIFF; 1.0 said `null`.
 - Error messages no longer show `?<redacted><redacted>`.
 
+### Provider options and credentials
+- `usgs_ard` and `usgs_m2m` reject unknown `provider_options` (they used
+  to ignore typos) and no longer accept `usgs_username`/`usgs_token` there:
+  USGS credentials come only from `USGS_M2M_USERNAME`/`USGS_M2M_TOKEN`.
+  **Configs that put them in `provider_options` must move them to the
+  environment.**
+
 ### Product consistency
 - A sensor without `product_family` resolves to the provider's product only
   if that is an agency source product (`usgs_ard_sr`, `usgs_c2_l2`,
@@ -59,6 +66,16 @@
   continuing. Still failing after that, it stops with **exit code 5** and
   resumes on the next run. Before, a multi-hour USGS outage could use up
   `max_attempts` for every remaining acquisition within hours.
+- **USGS ARD downloads are verified** against the SHA-512 `file:checksum`
+  in each STAC item; a mismatching or truncated file is downloaded again,
+  and a connection dropped mid-file (`ChunkedEncodingError`) is retried
+  like other transport errors. Rows record it as `sourceIntegrity`.
+  M2M HTML maintenance pages are retried instead of failing the
+  acquisition; a rejected M2M token (`AUTH_*`) stops the run.
+- Signed URLs and per-tile locks are dropped once a tile is read, instead
+  of accumulating for the whole run. A failed acquisition's future is
+  released as soon as it is recorded. Progress lines report memory
+  (`rss`, `peak`).
 - Failures that waiting can't fix stop the run at once (exit code 5),
   without counting the attempt: output disk full, quota exceeded or
   read-only, and provider `SystemicError`s such as rejected credentials.

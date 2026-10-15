@@ -98,7 +98,7 @@ from data_loader.product_contract import (
     ProductIdentity,
     parse_version_policy,
 )
-from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef, redact_urls
+from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef, SystemicError, redact_urls
 from data_loader.tiles import UsgsArdConusGrid, item_tile_id
 
 STAC_URL = "https://landsatlook.usgs.gov/stac-server"
@@ -396,7 +396,8 @@ class UsgsArdProvider:
             ))
         return refs
 
-    def search_tile(self, tile_id: str, sensor: str, start, end, max_cloud_percent=None) -> list[SceneRef]:
+    def search_tile(self, tile_id: str, sensor: str, start, end, max_cloud_percent=None,
+                    processing_version_policy="any") -> list[SceneRef]:
         """Every ARD item of one CONUS tile in [start, end]. Searches the
         WHOLE tile extent and keeps only items on this tile's grid h/v: an
         ARD item's STAC geometry is its data footprint, so a small AOI
@@ -405,6 +406,9 @@ class UsgsArdProvider:
         3,885 observations)."""
         if sensor != "landsat":
             raise ValueError(f"usgs_ard only supports sensor='landsat' (got {sensor!r})")
+        if parse_version_policy(processing_version_policy)[0] == "pinned":
+            raise ValueError("[usgs_ard] processing_version_policy='pinned:...' is not supported -- "
+                             "ARD tiles have no reprocessing-baseline concept.")
         h, v = self.tile_grid.parse(tile_id)
         query = {"landsat:grid_horizontal": {"eq": f"{h:02d}"}, "landsat:grid_vertical": {"eq": f"{v:02d}"},
                  "landsat:grid_region": {"eq": "CU"}}
@@ -442,10 +446,9 @@ class UsgsArdProvider:
             if self._session is not None and time.time() - self._session_born < RELOGIN_AFTER:
                 return self._session
             if not self.username or not self.token:
-                raise RuntimeError(
+                raise SystemicError(
                     "[usgs_ard] reading ARD bands needs USGS EROS credentials "
-                    "-- pass provider_options: {usgs_username: \"...\", "
-                    "usgs_token: \"...\"}, or set USGS_M2M_USERNAME / "
+                    "-- set USGS_M2M_USERNAME / "
                     "USGS_M2M_TOKEN. Generate an application token at "
                     "https://ers.cr.usgs.gov (M2M API access must also be "
                     "approved on the account). Discovery (search_scenes) "
@@ -473,7 +476,10 @@ class UsgsArdProvider:
                       f"{body.get('errorCode')}: {body.get('errorMessage')}")
                 time.sleep(2 * (attempt + 1))
             if body.get("errorCode") or not resp.ok:
-                raise RuntimeError(
+                # AUTH_* (bad/expired token, M2M access not approved) won't fix
+                # itself: stop the run instead of failing every acquisition.
+                cls = SystemicError if str(body.get("errorCode") or "").startswith("AUTH") else RuntimeError
+                raise cls(
                     f"[usgs_ard] M2M login-token failed (HTTP {resp.status_code}): "
                     f"{body.get('errorCode')}: {body.get('errorMessage')}"
                 )
@@ -521,10 +527,11 @@ class UsgsArdProvider:
             try:
                 body = resp.json()
             except ValueError:
-                raise RuntimeError(
-                    f"[usgs_ard] M2M {endpoint}: non-JSON response "
-                    f"(HTTP {resp.status_code}): {resp.text[:500]}"
-                )
+                # An HTML maintenance/error page from a proxy: transient.
+                last_exc = RuntimeError(f"non-JSON response (HTTP {resp.status_code}): {resp.text[:200]}")
+                print(f"[{self.name}] M2M {endpoint} retry {attempt + 1}/{self.retries}: {redact_urls(last_exc)}")
+                time.sleep(5 * (attempt + 1))
+                continue
             if _is_rate_limit_error(body):
                 last_exc = RuntimeError(f"{body.get('errorCode')}: {body.get('errorMessage')}")
                 print(f"[{self.name}] M2M {endpoint} rate-limit retry {attempt + 1}/{self.retries}: {last_exc}")
@@ -600,6 +607,16 @@ class UsgsArdProvider:
             )
         return urls
 
+    def _forget_tile(self, tile_product_id: str) -> None:
+        """Drop a finished tile's signed URLs (they expire anyway; a retry
+        mints new ones) and its lock, so a weeks-long run doesn't keep one
+        entry per band file it ever read."""
+        with self._lock_for_tile(tile_product_id):
+            for key in [k for k in self._signed_url_cache if k[0] == tile_product_id]:
+                del self._signed_url_cache[key]
+        with self._tile_locks_guard:
+            self._tile_locks.pop(tile_product_id, None)
+
     def _lock_for_tile(self, tile_product_id: str) -> threading.Lock:
         with self._tile_locks_guard:
             lock = self._tile_locks.get(tile_product_id)
@@ -637,7 +654,7 @@ class UsgsArdProvider:
         """Source DN for `bands` (+ QA_PIXEL if with_qa) on `grid`: whole-file
         downloads for a full tile on its native grid, windowed /vsicurl reads
         (bilinear for SR, nearest for QA) otherwise. Returns
-        ({band: dn}, qa_or_None)."""
+        ({band: dn}, qa_or_None, integrity_or_None)."""
         import rasterio
         from rasterio.enums import Resampling
         from rasterio.vrt import WarpedVRT
@@ -675,20 +692,30 @@ class UsgsArdProvider:
         resampling = {suffix_for[b]: Resampling.bilinear for b in bands}
         if with_qa:
             resampling[suffix_for["qa"]] = Resampling.nearest
-        if _is_native_tile_grid(scene, grid):
-            dn_by_suffix = self._read_native_tile(tile_product_id, needed, grid, resampling)
-            read = dn_by_suffix.__getitem__
-        else:
-            read = lambda suffix: read_asset(suffix, resampling[suffix])
+        integrity = None
+        try:
+            if _is_native_tile_grid(scene, grid):
+                checksums = _asset_checksums(scene, tile_product_id)
+                dn_by_suffix = self._read_native_tile(tile_product_id, needed, grid, resampling, checksums)
+                read = dn_by_suffix.__getitem__
+                verified = sum(1 for sfx in needed if checksums.get(sfx))
+                if verified:
+                    integrity = {"method": "sha2-512 of each downloaded file vs the STAC item's file:checksum",
+                                 "files": verified, "of": len(needed)}
+            else:
+                read = lambda suffix: read_asset(suffix, resampling[suffix])
 
-        dn = {b: read(suffix_for[b]) for b in bands}
-        qa = read(suffix_for["qa"]) if with_qa else None
-        return dn, qa
+            dn = {b: read(suffix_for[b]) for b in bands}
+            qa = read(suffix_for["qa"]) if with_qa else None
+        finally:
+            self._forget_tile(tile_product_id)
+        return dn, qa, integrity
 
     def read_scene_native(self, scene: SceneRef, sensor: str, bands, grid: Grid, include_qa: bool) -> NativeRead:
-        dn, qa = self._read_dn(scene, bands, grid, include_qa)
+        dn, qa, integrity = self._read_dn(scene, bands, grid, include_qa)
         return NativeRead(bands=dn, scale={b: SR_SCALE for b in bands}, offset={b: SR_OFFSET for b in bands},
-                          nodata=SR_FILL_DN, qa=qa.astype("uint16") if qa is not None else None)
+                          nodata=SR_FILL_DN, qa=qa.astype("uint16") if qa is not None else None,
+                          integrity=integrity)
 
     def read_scene_bands(self, scene: SceneRef, sensor: str, bands, grid: Grid, pixel_cloud_mask: bool,
                          keep_qa: bool = False):
@@ -697,7 +724,7 @@ class UsgsArdProvider:
         out["qa_pixel"] (uint16, unscaled) -- used by
         bench/ard_tile_history_bench.py; the engine reads through
         read_scene_native instead."""
-        dn, qa = self._read_dn(scene, bands, grid, pixel_cloud_mask or keep_qa)
+        dn, qa, _ = self._read_dn(scene, bands, grid, pixel_cloud_mask or keep_qa)
         out: dict[str, np.ndarray] = {b: dn_to_reflectance(dn[b], SR_SCALE, SR_OFFSET) for b in bands}
         if pixel_cloud_mask:
             bad = landsat_qa_mask(qa)
@@ -709,10 +736,13 @@ class UsgsArdProvider:
 
     # -- full-tile reads on the native grid --------------------------------
 
-    def _download_band(self, tile_product_id: str, suffix: str, needed: list[str]) -> bytes:
+    def _download_band(self, tile_product_id: str, suffix: str, needed: list[str],
+                       checksum: Optional[str] = None) -> bytes:
         """One whole band file over its signed URL. Re-mints once on an
         auth-shaped failure (expired signature), and retries transient
-        transport failures with backoff -- both bounded."""
+        transport failures -- including a connection dropped mid-body and a
+        body whose SHA-512 doesn't match `checksum` (the STAC item's
+        multihash) -- with backoff, all bounded."""
         import requests
 
         refreshed = False
@@ -731,8 +761,12 @@ class UsgsArdProvider:
                 if expected is not None and int(expected) != len(r.content):
                     raise requests.ConnectionError(
                         f"truncated body: {len(r.content)} of {expected} bytes")
+                if checksum and not _multihash_matches(r.content, checksum):
+                    raise ChecksumMismatch(f"{tile_product_id}_{suffix}.TIF: SHA-512 of the downloaded file "
+                                           "does not match the STAC item's file:checksum")
                 return r.content
-            except (requests.ConnectionError, requests.Timeout) as e:
+            except (requests.ConnectionError, requests.Timeout, requests.exceptions.ChunkedEncodingError,
+                    requests.exceptions.ContentDecodingError, ChecksumMismatch) as e:
                 err = e
             except requests.HTTPError as e:
                 if e.response is None or e.response.status_code < 500:
@@ -747,7 +781,7 @@ class UsgsArdProvider:
             time.sleep(2 ** attempt)
 
     def _read_native_tile(self, tile_product_id: str, needed: list[str], grid: Grid,
-                          resampling: dict) -> dict[str, np.ndarray]:
+                          resampling: dict, checksums: Optional[dict] = None) -> dict[str, np.ndarray]:
         """Whole-file GETs of every needed band, in parallel, decoded from
         memory. Each decoded file's grid is checked against `grid`; any
         mismatch (which the STAC proj:* precheck should already rule out)
@@ -763,7 +797,7 @@ class UsgsArdProvider:
         self._band_url(tile_product_id, needed[0], needed)
         with ThreadPoolExecutor(len(needed)) as ex:
             blobs = dict(zip(needed, ex.map(
-                lambda s: self._download_band(tile_product_id, s, needed), needed)))
+                lambda s: self._download_band(tile_product_id, s, needed, (checksums or {}).get(s)), needed)))
 
         out = {}
         for suffix, blob in blobs.items():
@@ -780,6 +814,35 @@ class UsgsArdProvider:
         return out
 
 
+class ChecksumMismatch(RuntimeError):
+    pass
+
+
+def _multihash_matches(data: bytes, multihash: str) -> bool:
+    """Does `data` match a hex multihash (STAC file:checksum)? Only SHA-512
+    ("13" "40" + 64-byte digest, what LandsatLook publishes) and SHA-256
+    ("12" "20" + 32 bytes) are understood; anything else is not checked."""
+    import hashlib
+
+    algo = {"13": hashlib.sha512, "12": hashlib.sha256}.get(multihash[:2].lower())
+    if algo is None or int(multihash[2:4], 16) * 2 != len(multihash) - 4:
+        return True
+    return algo(data).hexdigest() == multihash[4:].lower()
+
+
+def _asset_checksums(scene: SceneRef, tile_product_id: str) -> dict:
+    """band file suffix -> file:checksum, from the item's verbatim record."""
+    to_dict = getattr(scene.handle, "to_dict", None)
+    if not callable(to_dict):
+        return {}
+    out, prefix = {}, f"{tile_product_id}_"
+    for asset in (to_dict().get("assets") or {}).values():
+        name = str(asset.get("href", "")).rsplit("/", 1)[-1].split("?")[0]
+        if name.startswith(prefix) and name.upper().endswith(".TIF") and asset.get("file:checksum"):
+            out[name[len(prefix):-4]] = asset["file:checksum"]
+    return out
+
+
 def _is_native_tile_grid(scene: SceneRef, grid: Grid) -> bool:
     """Does `grid` cover exactly this ARD tile at its native resolution,
     per the STAC item's proj:shape/proj:transform? (Cheap precheck that
@@ -794,5 +857,13 @@ def _is_native_tile_grid(scene: SceneRef, grid: Grid) -> bool:
             and Affine(*transform[:6]).almost_equals(grid.transform))
 
 
-def make_provider(usgs_username: Optional[str] = None, usgs_token: Optional[str] = None, **kwargs) -> UsgsArdProvider:
-    return UsgsArdProvider(username=usgs_username, token=usgs_token)
+def make_provider(**provider_options) -> UsgsArdProvider:
+    """usgs_ard takes no provider_options. Credentials come only from the
+    environment (USGS_M2M_USERNAME / USGS_M2M_TOKEN), never from a config
+    file that could be committed or shared."""
+    if {"usgs_username", "usgs_token"} & set(provider_options):
+        raise ValueError("usgs_ard: credentials are not accepted in provider_options; set USGS_M2M_USERNAME "
+                         "and USGS_M2M_TOKEN in the environment (see docs/getting-started.md)")
+    if provider_options:
+        raise ValueError(f"usgs_ard takes no provider_options (got {', '.join(sorted(provider_options))})")
+    return UsgsArdProvider()

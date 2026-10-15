@@ -136,6 +136,18 @@ def _now_utc() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _memory_note() -> str:
+    """", rss X GB (peak Y GB)" for progress lines, where /proc is available."""
+    try:
+        status = Path("/proc/self/status").read_text()
+    except OSError:
+        return ""
+    kb = {l.split(":")[0]: int(l.split()[1]) for l in status.splitlines() if l.startswith(("VmRSS", "VmHWM"))}
+    if "VmRSS" not in kb:
+        return ""
+    return f", rss {kb['VmRSS'] / 2**20:.1f} GB (peak {kb.get('VmHWM', 0) / 2**20:.1f} GB)"
+
+
 def _sanitize(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "_", s)
 
@@ -263,7 +275,8 @@ def discover(config: Config, provider=None, *, today: Optional[date] = None,
         excluded = []
         if config.aoi.tiles:
             for tile in config.aoi.tiles:
-                refs = provider.search_tile(tile, sensor, start, end, None)
+                refs = provider.search_tile(tile, sensor, start, end, None, contract.processing_version_policy)
+                excluded += list(getattr(provider, "last_excluded_versions", []) or [])
                 grid = (provider.tile_grid.grid_from_item(tile, refs[0].handle) if refs
                         else provider.tile_grid.default_grid(tile))
                 groups.append((tile, grid, refs))
@@ -407,6 +420,7 @@ def _acquire_scene(ctx: _RunContext, unit: Unit) -> dict:
             "DATALOADER_SENSOR": sensor, "DATALOADER_PROVIDER": cfg.provider, "DATALOADER_GRID": unit.grid_id}
     t0 = time.perf_counter()
     files = []
+    integrity = None
     if out.encoding == "native":
         enc = ctx.provider.native_encoding(sensor)
         nr = ctx.provider.read_scene_native(scene, sensor, list(out.bands), grid,
@@ -427,6 +441,7 @@ def _acquire_scene(ctx: _RunContext, unit: Unit) -> dict:
                      tags=tags)
         files.append(_file_entry(ctx, path, "bands",
                                  bandScaleOffset={b: [scales[b], offsets[b]] for b in arrays}))
+        integrity = nr.integrity
     else:
         refl, qa = _read_reflectance(ctx, scene, sensor, grid, out.qa_band)
         read_s = time.perf_counter() - t0
@@ -449,6 +464,7 @@ def _acquire_scene(ctx: _RunContext, unit: Unit) -> dict:
     prov, ref = _source_record(ctx, scene)
     return {**_scene_row_base(unit, scene), "status": "acquired", "validFraction": round(valid, 6),
             "files": files, "provenance": prov, "sourceMetadata": ref,
+            **({"sourceIntegrity": integrity} if integrity else {}),
             "timing": {"readS": round(read_s, 2), "totalS": round(time.perf_counter() - t0, 2)}}
 
 
@@ -740,7 +756,8 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
                 n = counter["attempts"]
                 rate = (time.perf_counter() - t_work) / n
                 log(f"[run] {counter['done']}/{len(todo)} acquired ({n - counter['done']} failed attempts), "
-                    f"{rate:.1f} s/unit, ~{rate * max(len(todo) - counter['done'], 0) / 3600:.1f} h left")
+                    f"{rate:.1f} s/unit, ~{rate * max(len(todo) - counter['done'], 0) / 3600:.1f} h left"
+                    + _memory_note())
             if writer.since_catalog >= CATALOG_EVERY_UNITS or now - last["catalog"] >= CATALOG_EVERY_S:
                 last["catalog"] = now
                 writer.write_catalog(core, complete=False)
@@ -765,19 +782,22 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
                         time.sleep(RETRY_WAIT_S)
                     retry = []
                     futures: dict = {}
-                    handled: set = set()
                     try:
                         if config.temporal_mode == "scene":
                             futures = {pool.submit(_acquire_scene, ctx, u): (u, a) for u, a in pending}
                             for fu in as_completed(futures):
-                                u, a = futures[fu]
-                                handled.add(fu)
+                                # Drop the future once handled: a failed one holds its exception,
+                                # whose traceback keeps the failed read's data alive (for a full
+                                # ARD tile, the band files already downloaded, ~200 MB).
+                                u, a = futures.pop(fu)
                                 try:
                                     row, err = fu.result(), None
                                 except Exception as e:
                                     row, err = None, e
+                                del fu
                                 if not finish(u, a, row, err):
                                     retry.append((u, a + 1))
+                                row = err = None
                         else:
                             for u, a in pending:
                                 try:
@@ -793,8 +813,8 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
                         ctx.stopping = True
                         ctx.gate.set()
                         pool.shutdown(wait=True, cancel_futures=True)
-                        for fu, (u, a) in futures.items():
-                            if fu in handled or fu.cancelled() or not fu.done():
+                        for fu, (u, a) in futures.items():  # only futures not yet handled
+                            if fu.cancelled() or not fu.done():
                                 continue
                             if fu.exception() is None:
                                 finish(u, a, fu.result(), None)
