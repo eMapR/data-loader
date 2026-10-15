@@ -34,6 +34,17 @@
   rewriting it.
 
 ### Reliability
+- **Circuit breaker** (`max_consecutive_failures`, default 20, `0` = off):
+  when that many acquisitions fail their first attempt in a row, the run
+  treats the source as down: those attempts are not counted against
+  `max_attempts`, and it pauses 5, 15, 30, then 60 minutes before
+  continuing. Still failing after that, it stops with **exit code 5** and
+  resumes on the next run. Before, a multi-hour USGS outage could use up
+  `max_attempts` for every remaining acquisition within hours.
+- Failures that waiting can't fix stop the run at once (exit code 5),
+  without counting the attempt: output disk full, quota exceeded or
+  read-only, and provider `SystemicError`s such as rejected credentials.
+  `dataset.runs[]` records why a run stopped.
 - manifest.json, items.jsonl, GeoTIFFs and the run journal are flushed to
   disk (fsync) before they replace the previous version, so a power loss
   can't leave an empty `items.jsonl`. Metadata snapshots are written

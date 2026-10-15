@@ -128,7 +128,8 @@ class DatasetWriter:
                 self.close()
                 raise DatasetError(
                     f"{self.root} already holds a different dataset (request differs in: {', '.join(diff)}). "
-                    "Use a new output.dir; only the end of the time range, workers, max_attempts and "
+                    "Use a new output.dir; only the end of the time range, workers, max_attempts, "
+                    "max_consecutive_failures and "
                     "provider_options may change between runs into the same directory.")
             self.created = old.get("dataset", {}).get("created", self.created)
             self.runs = list(old.get("dataset", {}).get("runs") or [])

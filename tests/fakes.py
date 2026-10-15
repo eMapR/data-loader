@@ -60,11 +60,12 @@ class FakeProvider:
     SCALE, OFFSET = 2.75e-5, -0.2
 
     def __init__(self, scenes, *, native=False, tiles=False, product_family=USGS_C2_L2,
-                 fail=None, delays=None, shared_item_id=None, interrupt=(), fail_message=None):
+                 fail=None, delays=None, shared_item_id=None, interrupt=(), fail_message=None, fail_exc=None):
         self.scenes = list(scenes)
         self._identity = ProductIdentity("landsat", product_family, SCENE)
         self.fail = dict(fail or {})  # scene id -> number of times to fail (or -1 = always)
         self.fail_message = fail_message or "simulated failure reading {id}"
+        self.fail_exc = dict(fail_exc or {})  # scene id -> exception raised (every read)
         self.delays = dict(delays or {})
         self.shared_item_id = dict(shared_item_id or {})
         self.interrupt = set(interrupt)  # scene ids whose read raises KeyboardInterrupt
@@ -118,6 +119,9 @@ class FakeProvider:
                 self.active -= 1
                 raise KeyboardInterrupt
             self.reads.append(scene.id)
+            if scene.id in self.fail_exc:
+                self.active -= 1
+                raise self.fail_exc[scene.id]
             n = self.fail.get(scene.id, 0)
             if n:
                 self.fail[scene.id] = n - 1 if n > 0 else n

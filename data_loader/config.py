@@ -324,6 +324,11 @@ class Config:
     # Give up on one acquisition after this many failed attempts, counted
     # across re-runs of the same output directory.
     max_attempts: int = 3
+    # Circuit breaker: after this many acquisitions fail their first attempt
+    # in a row (no success in between) the run pauses and retries later
+    # instead of using up every acquisition's attempts during an outage;
+    # 0 turns it off.
+    max_consecutive_failures: int = 20
     provider_options: dict = field(default_factory=dict)
     version: int = SCHEMA_VERSION
 
@@ -368,6 +373,8 @@ class Config:
             raise ConfigError(f"workers must be >= 1, got {self.workers}")
         if self.max_attempts < 1:
             raise ConfigError(f"max_attempts must be >= 1, got {self.max_attempts}")
+        if self.max_consecutive_failures < 0:
+            raise ConfigError(f"max_consecutive_failures must be >= 0, got {self.max_consecutive_failures}")
         from data_loader.product_contract import parse_version_policy
         for s in self.sensors:
             try:
@@ -395,7 +402,7 @@ class Config:
 # directory without making it a different dataset: run tuning, where the
 # directory lives, and how far the request extends in time (extending it is
 # how a dataset is updated).
-_MUTABLE = {("output", "dir"), ("workers",), ("max_attempts",), ("provider_options",),
+_MUTABLE = {("output", "dir"), ("workers",), ("max_attempts",), ("max_consecutive_failures",), ("provider_options",),
             ("time", "end_year"), ("time", "end_date")}
 
 
@@ -414,7 +421,7 @@ def request_identity(cfg: dict) -> dict:
 # -- loading -----------------------------------------------------------------
 
 _TOP = ("version", "provider", "sensors", "aoi", "time", "temporal_mode", "reduce", "filters",
-        "grid", "output", "workers", "max_attempts", "provider_options")
+        "grid", "output", "workers", "max_attempts", "max_consecutive_failures", "provider_options")
 
 _PRE_V1_HINT = (
     "this config has no `version:` key. DataLoader 1.0 changed the config format: "
@@ -513,6 +520,7 @@ def config_from_dict(data: dict, *, source: str = "config") -> Config:
         output=output,
         workers=_int(data.get("workers", 1), "workers"),
         max_attempts=_int(data.get("max_attempts", 3), "max_attempts"),
+        max_consecutive_failures=_int(data.get("max_consecutive_failures", 20), "max_consecutive_failures"),
         provider_options=dict(provider_options),
     )
 

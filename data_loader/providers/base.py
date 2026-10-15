@@ -42,6 +42,13 @@ def redact_urls(text) -> str:
     return _URL_QUERY_RE.sub(r"\1?<redacted>", str(text))
 
 
+class SystemicError(RuntimeError):
+    """A failure that is not about one acquisition and that retrying the
+    next acquisition won't fix (credentials rejected, account not allowed,
+    ...). Providers raise it so the engine stops the run instead of
+    spending every acquisition's attempts on it."""
+
+
 @dataclass(frozen=True)
 class Grid:
     """Target pixel grid: CRS + affine transform + size, shared by every

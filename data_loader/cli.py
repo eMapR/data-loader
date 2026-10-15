@@ -9,7 +9,9 @@
 
 Exit codes: 0 ok; 1 unexpected error; 2 invalid config/request;
 3 run finished but some acquisitions are failed or still pending
-(re-run to retry); 4 verify found problems.
+(re-run to retry); 4 verify (or upgrade --check-files) found problems;
+5 run stopped itself (disk full, credentials rejected, source down for
+hours) -- fix the cause and re-run; 130 interrupted.
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ from datetime import datetime
 from data_loader._version import __version__
 from data_loader.config import ConfigError, load_config
 from data_loader.dataset import DatasetError, open_dataset
+from data_loader.engine import RunStopped
 
 
 def _log(msg: str) -> None:
@@ -190,6 +193,9 @@ def main(argv=None) -> int:
     except (ConfigError, DatasetError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    except RunStopped as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 5
     except KeyboardInterrupt:
         print("\ninterrupted -- finished acquisitions are saved; run the same command to resume", file=sys.stderr)
         return 130

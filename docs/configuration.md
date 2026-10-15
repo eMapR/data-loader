@@ -56,6 +56,7 @@ output:
 
 workers: 4                       # acquisitions in flight at once (default 1)
 max_attempts: 3                  # per acquisition, across re-runs (default 3)
+max_consecutive_failures: 20     # circuit breaker: pause after this many failures in a row (0 = off)
 provider_options: {}             # provider-specific extras, e.g. {gee_project: my-project}
 ```
 
@@ -181,8 +182,9 @@ reflectance is resampled bilinearly and QA by nearest neighbor.
 - **`dir`**: where the dataset goes. Override it per run with `--output-dir`.
   One directory holds one dataset. Re-running the same request resumes or
   updates it. A *different* request into the same directory is refused;
-  only the end of the time range, `workers`, `max_attempts` and
-  `provider_options` may change between runs.
+  only the end of the time range, `workers`, `max_attempts`,
+  `max_consecutive_failures` and `provider_options` may change between
+  runs.
 - **`encoding`**:
   - `float32`: surface reflectance with `NaN` nodata, ready to use.
     Indices are always float32.
@@ -213,6 +215,16 @@ reflectance is resampled bilinearly and QA by nearest neighbor.
   each), so transient errors usually clear within one run. Attempts are
   counted across re-runs; after the last one, the acquisition stays
   `failed` in `items.jsonl`. Raise it and re-run to try again.
+- **`max_consecutive_failures`** (default 20; `0` turns it off): a
+  circuit breaker for outages. When this many acquisitions fail their
+  first attempt in a row, with no success in between, the source is
+  treated as down rather than the
+  acquisitions as bad: those attempts are not counted against
+  `max_attempts`, and the run pauses (5, 15, 30, then 60 minutes) before
+  trying again. If it is still failing after the last pause, the run stops
+  with exit code 5; re-run later and it resumes. Failures that can't be
+  fixed by waiting (disk full, read-only disk, rejected credentials) stop
+  the run at once, also without using up attempts.
 - **`provider_options`**: extra provider arguments, such as
   `{gee_project: ...}`. Only the option *names* are recorded in the
   manifest, never the values. Credentials belong in environment

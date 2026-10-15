@@ -26,6 +26,7 @@ immediately, so a killed run loses at most the units in flight.
 """
 from __future__ import annotations
 
+import errno
 import re
 import subprocess
 import threading
@@ -49,12 +50,39 @@ from data_loader.masking import MASKS, QA_DESCRIPTIONS, describe_mask, dn_to_ref
 from data_loader.metadata_snapshot import write_snapshot
 from data_loader.product_contract import ProductContract, resolve_contract
 from data_loader.providers import get_provider
-from data_loader.providers.base import Grid, SceneRef, redact_urls
+from data_loader.providers.base import Grid, SceneRef, SystemicError, redact_urls
 
 CATALOG_EVERY_UNITS = 200
 RETRY_WAIT_S = 60  # pause before each retry pass (per grid)
 CATALOG_EVERY_S = 600
 PROGRESS_EVERY_S = 60
+# Circuit breaker pauses after max_consecutive_failures failures in a row;
+# still failing after the last one stops the run (RunStopped).
+BREAKER_PAUSES_S = (300, 900, 1800, 3600)
+
+
+class RunStopped(RuntimeError):
+    """The run stopped itself because of a failure that isn't about one
+    acquisition (disk full, credentials rejected, source down for hours).
+    Nothing it hit was counted against max_attempts; re-run to resume."""
+
+
+_DISK_ERRNOS = {errno.ENOSPC, errno.EDQUOT, errno.EROFS}
+_DISK_TEXT = re.compile(r"No space left on device|Disk quota exceeded|Read-only file system", re.I)
+
+
+def _systemic_reason(err: BaseException) -> Optional[str]:
+    """Why `err` is about the whole run rather than one acquisition, or None."""
+    seen, e = set(), err
+    while e is not None and id(e) not in seen:
+        seen.add(id(e))
+        if isinstance(e, SystemicError):
+            return redact_urls(str(e))
+        if isinstance(e, OSError) and e.errno in _DISK_ERRNOS:
+            return f"output disk: {e.strerror}"
+        e = e.__cause__ or e.__context__
+    m = _DISK_TEXT.search(str(err))
+    return f"output disk: {m.group(0)}" if m else None
 
 
 @dataclass
@@ -298,6 +326,10 @@ class _RunContext:
     root: Path
     today: date
     bands_needed: list
+    # Closed while the circuit breaker pauses the run; workers wait at the
+    # start of each acquisition. `stopping` makes waiting workers give up.
+    gate: threading.Event = field(default_factory=threading.Event)
+    stopping: bool = False
     snapshot_lock: threading.Lock = field(default_factory=threading.Lock)
     snapshots: dict = field(default_factory=dict)
 
@@ -344,7 +376,14 @@ def _read_reflectance(ctx: _RunContext, scene: SceneRef, sensor: str, grid: Grid
     return provider.read_scene_bands(scene, sensor, ctx.bands_needed, grid, cfg.filters.pixel_cloud_mask), None
 
 
+def _wait_gate(ctx: _RunContext) -> None:
+    ctx.gate.wait()
+    if ctx.stopping:
+        raise RunStopped("run stopping")
+
+
 def _acquire_scene(ctx: _RunContext, unit: Unit) -> dict:
+    _wait_gate(ctx)
     cfg, out = ctx.config, ctx.config.output
     scene, sensor, grid = unit.scene, unit.sensor, unit.grid
     stem = f"{sensor}/{unit.grid_id}/{scene.date.year}/{scene.date.isoformat()}_{_sanitize(scene.id)}"
@@ -596,6 +635,7 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
         ctx = _RunContext(config=config, provider=provider, root=root, today=plan.today,
                           bands_needed=list(config.output.bands) + sorted(
                               required_raw_bands(config.output.indices) - set(config.output.bands)))
+        ctx.gate.set()
 
         todo, already = [], 0
         for sp in plan.sensors:
@@ -622,19 +662,62 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
         counter = {"done": 0, "failed": 0, "attempts": 0}
         last = {"catalog": time.monotonic(), "progress": time.monotonic()}
         t_work = time.perf_counter()
+        # Circuit breaker state: failures since the last success, and the
+        # attempt counts given back to units whose failures were an outage.
+        breaker = {"streak": [], "level": 0}
+        refunded: dict = {}
+
+        def refund(units, reason: str) -> None:
+            for u, attempts, error in units:
+                refunded[u.key] = attempts
+                writer.record({**_row_base(u), "status": "pending", "attempts": attempts,
+                               "lastError": error, "note": f"not counted against max_attempts: {reason}"})
 
         def finish(u: Unit, attempts: int, row: Optional[dict], err: Optional[BaseException]) -> bool:
             """Record one finished attempt; True if it succeeded."""
             counter["attempts"] += 1
             if err is not None:
-                row = {**_row_base(u), "status": "failed", "attempts": attempts + 1,
-                       "error": redact_urls(f"{type(err).__name__}: {err}")[:1000], "software": software}
-                log(f"[run] {u.key} FAILED (attempt {attempts + 1}/{config.max_attempts}): {row['error'][:300]}")
+                error = redact_urls(f"{type(err).__name__}: {err}")[:1000]
+                reason = _systemic_reason(err)
+                if reason is not None or isinstance(err, RunStopped):
+                    refund([(u, attempts, error)], "the run stopped")
+                    raise err if isinstance(err, RunStopped) else RunStopped(
+                        f"stopped: {reason}. This is not about one acquisition, so nothing was counted against "
+                        "max_attempts; fix it and run the same command again to resume") from err
+                row = {**_row_base(u), "status": "failed", "attempts": attempts + 1, "error": error,
+                       "software": software}
+                log(f"[run] {u.key} FAILED (attempt {attempts + 1}/{config.max_attempts}): {error[:300]}")
+                # Only first attempts count: a retry pass runs nothing but earlier
+                # failures, so a run of them failing says little about the source.
+                if attempts == 0:
+                    breaker["streak"].append((u, attempts, error))
             else:
                 row["attempts"] = attempts + 1
                 row["software"] = software
                 counter["done"] += 1
+                breaker["streak"].clear()
+                breaker["level"] = 0
             writer.record(row)
+            limit = config.max_consecutive_failures
+            if err is not None and limit and len(breaker["streak"]) >= limit:
+                streak, breaker["streak"] = breaker["streak"], []
+                refund(streak, f"{limit} consecutive failures (source unavailable?)")
+                if breaker["level"] >= len(BREAKER_PAUSES_S):
+                    raise RunStopped(
+                        f"stopped: still {limit} failures in a row after pausing "
+                        f"{sum(BREAKER_PAUSES_S) // 60} min in total; the source looks unavailable. Nothing was "
+                        f"counted against max_attempts; run the same command again later to resume. "
+                        f"Last error: {error[:300]}")
+                pause = BREAKER_PAUSES_S[breaker["level"]]
+                breaker["level"] += 1
+                log(f"[run] circuit breaker: {limit} failures in a row (last: {error[:200]}); not counting "
+                    f"them, pausing {pause // 60} min before continuing")
+                writer.write_catalog(core, complete=False)
+                ctx.gate.clear()
+                try:
+                    time.sleep(pause)
+                finally:
+                    ctx.gate.set()
             now = time.monotonic()
             if now - last["progress"] >= PROGRESS_EVERY_S:
                 last["progress"] = now
@@ -677,29 +760,37 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
                                     row, err = fu.result(), None
                                 except Exception as e:
                                     row, err = None, e
-                                if not finish(u, a, row, err) and a + 1 < config.max_attempts:
+                                if not finish(u, a, row, err):
                                     retry.append((u, a + 1))
                         else:
                             for u, a in pending:
                                 try:
+                                    _wait_gate(ctx)
                                     row, err = _acquire_composite(ctx, u, pool), None
                                 except Exception as e:
                                     row, err = None, e
-                                if not finish(u, a, row, err) and a + 1 < config.max_attempts:
+                                if not finish(u, a, row, err):
                                     retry.append((u, a + 1))
-                    except BaseException:
-                        # Interrupted: let in-flight acquisitions finish and record
-                        # them, so a resume doesn't redo work already on disk.
+                    except BaseException as stop:
+                        # Interrupted or stopped: let in-flight acquisitions finish and
+                        # record them, so a resume doesn't redo work already on disk.
+                        ctx.stopping = True
+                        ctx.gate.set()
                         pool.shutdown(wait=True, cancel_futures=True)
                         for fu, (u, a) in futures.items():
                             if fu in handled or fu.cancelled() or not fu.done():
                                 continue
                             if fu.exception() is None:
                                 finish(u, a, fu.result(), None)
-                        run_info.update(finished=_now_utc(), interrupted=True, acquired=counter["done"])
+                        run_info.update(finished=_now_utc(), acquired=counter["done"],
+                                        **({"stopped": str(stop)[:500]} if isinstance(stop, RunStopped)
+                                           else {"interrupted": True}))
                         writer.write_catalog(core, complete=False)
                         raise
-                    pending = sorted(retry, key=lambda ua: ua[0].key)
+                    # an attempt refunded by the circuit breaker is retried at its old count
+                    retry = [(u, refunded.pop(u.key, a)) for u, a in retry]
+                    pending = sorted(((u, a) for u, a in retry if a < config.max_attempts),
+                                     key=lambda ua: ua[0].key)
         counter["failed"] = len({u.key for u, _ in todo} - {r["key"] for r in writer.rows()
                                                              if r.get("status") == "acquired"})
 
