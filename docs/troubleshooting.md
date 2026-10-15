@@ -41,7 +41,7 @@ see.
 
 **`... already holds a different dataset (request differs in: ...)`**
 : One directory holds one dataset. Only the end of the time range,
-  `workers`, `max_attempts` and `provider_options` may change between runs.
+  `workers`, `max_attempts`, `max_consecutive_failures` and `provider_options` may change between runs.
   Use a new `output.dir` (or `--output-dir`) for a different request.
 
 **`... is not empty and has no manifest.json`**
@@ -52,7 +52,44 @@ see.
 : A run is already in progress there (check `tmux ls` and `ps`). The lock
   is released automatically when that process exits, even if it crashed.
 
+**`product_family ... is not the agency's source product`**
+: The provider supplies a derived product (GLAD normalized composites, GEE
+  harmonized Sentinel-2). Name it with `sensors[].product_family` if that
+  is what you want.
+
+**`processing_version_policy 'pinned:...': ... no processing versions to choose from`**
+: Only Sentinel-2 has processing baselines. Use `any` for Landsat.
+
+**`manifest schema 2.x was written by an incompatible DataLoader`**
+: A newer DataLoader wrote this dataset. Upgrade DataLoader; this version
+  won't modify it.
+
+## Run stopped (exit code 5)
+
+**`stopped: output disk: No space left on device`** (or quota, read-only)
+: Free space (or fix the mount) and run the same command again. The
+  acquisition that hit it was not counted against `max_attempts`.
+
+**`stopped: ... M2M login-token failed ... AUTH_...`**
+: The USGS token was rejected or has expired: generate a new one, update
+  `USGS_M2M_TOKEN`, and re-run.
+
+**`stopped: still 20 failures in a row after pausing ...`**
+: The source has been failing for about two hours (the circuit breaker
+  paused 5, 15, 30 and 60 minutes first). Check the provider's status
+  page and re-run later; none of those failures were counted. To turn the
+  breaker off, set `max_consecutive_failures: 0`.
+
 ## USGS (`usgs_ard`, `usgs_m2m`)
+
+**`credentials are not accepted in provider_options`**
+: Move `usgs_username`/`usgs_token` out of the config into
+  `USGS_M2M_USERNAME`/`USGS_M2M_TOKEN` in the environment.
+
+**`SHA-512 of the downloaded file does not match the STAC item's file:checksum`**
+: The download was corrupted, or USGS republished the file after the
+  catalog was read. Single cases are retried automatically; if it happens
+  for every file, re-run (discovery re-reads the catalog) and report it.
 
 **`usgs_ard reads need a USGS EROS account with M2M access`**
 : Set `USGS_M2M_USERNAME` and `USGS_M2M_TOKEN`. See
