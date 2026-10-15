@@ -148,6 +148,7 @@ account, and needs roughly 5–6 TB.
 | [Getting started](docs/getting-started.md) | Install, credentials for each provider, first runs |
 | [Configuration](docs/configuration.md) | Every config key; years, seasons and dates; AOIs and tiles; migrating old configs |
 | [Providers](docs/providers.md) | What each provider serves, accounts and costs, when to choose which |
+| [Building a pipeline on it](docs/integration.md) | For downstream developers: find imagery, bands and QA, scale/offset, incomplete and in-progress archives |
 | [Outputs](docs/outputs.md) | Directory layout, `manifest.json` and `items.jsonl` field by field, reading data, masking with QA |
 | [Large jobs](docs/large-jobs.md) | Archives, runtime and storage, resume, updates, failures |
 | [Troubleshooting](docs/troubleshooting.md) | Common errors and fixes |

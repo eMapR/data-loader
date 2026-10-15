@@ -20,6 +20,10 @@ contract.
 `<grid>` is the tile ID (`h003v004`) for tile requests and `aoi` for a
 bbox.
 
+For a task-oriented guide to consuming a dataset (cloud masking, scale
+and offset, missing acquisitions, reading while a run is in progress), see
+[Building a pipeline on DataLoader output](integration.md).
+
 ## `manifest.json`
 
 ```jsonc

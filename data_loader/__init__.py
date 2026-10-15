@@ -21,7 +21,7 @@ from __future__ import annotations
 from data_loader._version import __version__
 from data_loader.config import Config, ConfigError, config_from_dict, load_config
 from data_loader.dataset import Dataset, DatasetError, open_dataset
-from data_loader.engine import RunSummary, check_request, run
+from data_loader.engine import RunStopped, RunSummary, check_request, run
 
 __all__ = [
     "__version__",
@@ -29,6 +29,7 @@ __all__ = [
     "ConfigError",
     "Dataset",
     "DatasetError",
+    "RunStopped",
     "RunSummary",
     "check_request",
     "config_from_dict",
