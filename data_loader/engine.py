@@ -102,6 +102,12 @@ class RunSummary:
         return self.counts.get("pending", 0) == 0 and self.counts.get("failed", 0) == 0
 
 
+def _now_utc() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
 def _sanitize(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "_", s)
 
@@ -364,9 +370,8 @@ def _acquire_scene(ctx: _RunContext, unit: Unit) -> dict:
         path = ctx.root / f"{stem}_bands.tif"
         write_raster(path, arrays, grid, dtype=enc.data_type, nodata=nr.nodata, scales=scales, offsets=offsets,
                      tags=tags)
-        varies = {b: [nr.scale[b], nr.offset[b]] for b in out.bands
-                  if (nr.scale[b], nr.offset[b]) != (enc.scale, enc.offset)}
-        files.append(_file_entry(ctx, path, "bands", bandScaleOffset=varies or None))
+        files.append(_file_entry(ctx, path, "bands",
+                                 bandScaleOffset={b: [scales[b], offsets[b]] for b in arrays}))
     else:
         refl, qa = _read_reflectance(ctx, scene, sensor, grid, out.qa_band)
         read_s = time.perf_counter() - t0
@@ -377,7 +382,7 @@ def _acquire_scene(ctx: _RunContext, unit: Unit) -> dict:
                 arrays[ctx.provider.native_encoding(sensor).qa_name] = qa.astype("float32")
             path = ctx.root / f"{stem}_bands.tif"
             write_float32(path, arrays, grid, tags=tags)
-            files.append(_file_entry(ctx, path, "bands"))
+            files.append(_file_entry(ctx, path, "bands", bandScaleOffset={b: [1.0, 0.0] for b in arrays}))
             first = arrays[out.bands[0]]
         if out.indices:
             arrays = {i: compute_index(i, refl) for i in out.indices}
@@ -433,7 +438,7 @@ def _acquire_composite(ctx: _RunContext, unit: Unit, pool: ThreadPoolExecutor) -
         arrays = {b: data[b] for b in out.bands}
         path = ctx.root / f"{stem}_bands.tif"
         write_float32(path, arrays, grid, tags=tags)
-        files.append(_file_entry(ctx, path, "bands"))
+        files.append(_file_entry(ctx, path, "bands", bandScaleOffset={b: [1.0, 0.0] for b in arrays}))
         first = arrays[out.bands[0]]
     if out.indices:
         arrays = {i: compute_index(i, data) for i in out.indices}
@@ -457,12 +462,23 @@ def _acquire_composite(ctx: _RunContext, unit: Unit, pool: ThreadPoolExecutor) -
 
 # -- manifest -------------------------------------------------------------------
 
-def _git_commit() -> Optional[str]:
+def _git(*args) -> Optional[str]:
     try:
-        return subprocess.run(["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"],
-                              capture_output=True, text=True, timeout=5).stdout.strip() or None
+        r = subprocess.run(["git", "-C", str(Path(__file__).resolve().parent), *args],
+                           capture_output=True, text=True, timeout=5)
+        return r.stdout.strip() if r.returncode == 0 else None
     except Exception:
         return None
+
+
+def software_info() -> dict:
+    """What produced an output: package version, git commit of the
+    data_loader source (None if not a git checkout), and whether that
+    source had uncommitted changes (None if unknown)."""
+    commit = _git("rev-parse", "HEAD") or None
+    status = _git("status", "--porcelain", "--", ".") if commit else None
+    return {"dataloaderVersion": __version__, "gitCommit": commit,
+            "gitDirty": None if status is None else bool(status)}
 
 
 def _band_sets(config: Config, provider, sensor: str) -> dict:
@@ -475,8 +491,8 @@ def _band_sets(config: Config, provider, sensor: str) -> dict:
                      "scale": enc.scale, "offset": enc.offset, "nodata": enc.nodata,
                      "unit": "surface reflectance = value * scale + offset"}
             if sensor == "sentinel2":
-                entry["scaleOffsetVaries"] = ("per file, see files[].bandScaleOffset (processing baseline "
-                                              ">= 04.00 uses offset -0.1)")
+                entry["scaleOffsetVaries"] = ("per file: use files[].bandScaleOffset, which is authoritative; "
+                                              "the offset depends on the processing baseline and catalog")
             bands.append(entry)
     else:
         for i, b in enumerate(out.bands, 1):
@@ -484,11 +500,17 @@ def _band_sets(config: Config, provider, sensor: str) -> dict:
                           "offset": 0.0, "nodata": "NaN", "unit": "surface reflectance"})
     if out.qa_band:
         enc = provider.native_encoding(sensor)
+        native = out.encoding == "native"
         bands.append({"index": len(bands) + 1, "name": enc.qa_name, "role": "qa",
-                      "dataType": enc.qa_data_type if out.encoding == "native" else "float32",
-                      "scale": 1.0, "offset": 0.0, "nodata": None, "qa": QA_DESCRIPTIONS[enc.qa_kind],
+                      "dataType": enc.qa_data_type if native else "float32",
+                      "scale": 1.0, "offset": 0.0,
+                      # GeoTIFF nodata is one value per file, so it applies to the QA band too
+                      "nodata": enc.nodata if native else "NaN",
+                      "qa": QA_DESCRIPTIONS[enc.qa_kind],
                       "note": "raw source QA values, unmodified" + (
-                          "" if out.encoding == "native" else " (stored as float32; values are exact integers)")})
+                          "" if native else " (stored as float32; values are exact integers)")
+                      + "; the file's nodata value also applies to this band. Use the QA meaning above, "
+                        "not the nodata mask, to find source fill"})
     indices = [{"index": i, "name": n, "role": "index", "dataType": "float32", "nodata": "NaN"}
                for i, n in enumerate(out.indices, 1)]
     return {"bands": bands, "indices": indices}
@@ -501,8 +523,9 @@ def _qa_kind(provider, sensor: str) -> Optional[str]:
     return profile(sensor).get("qa_policy") if callable(profile) else None
 
 
-def manifest_core(plan: Plan, provider, grid_infos: dict) -> dict:
+def manifest_core(plan: Plan, provider, grid_infos: dict, software: Optional[dict] = None) -> dict:
     cfg = plan.config
+    software = software or software_info()
     sensors = [sp.sensor for sp in plan.sensors]
     if cfg.filters.pixel_cloud_mask:
         mask = {"applied": True, "rules": {s: describe_mask(_qa_kind(provider, s)) for s in sensors
@@ -513,7 +536,7 @@ def manifest_core(plan: Plan, provider, grid_infos: dict) -> dict:
                                              else "")}
     profile = getattr(provider, "processing_profile", None)
     return {
-        "dataset": {"dataloaderVersion": __version__, "gitCommit": _git_commit()},
+        "dataset": dict(software),
         "request": cfg.to_dict(),
         "products": {sp.sensor: {"sensor": sp.sensor, "provider": cfg.provider,
                                  "productFamily": sp.contract.product_family,
@@ -528,7 +551,8 @@ def manifest_core(plan: Plan, provider, grid_infos: dict) -> dict:
                                  "note": "scenes above this are listed in items.jsonl with status 'filtered'; "
                                          "scenes with unknown cloud cover are kept"},
             "pixelCloudMask": mask,
-            "fill": "source fill (SR DN 0) is nodata in every encoding",
+            "fill": ("source fill is the file's nodata value in every encoding "
+                     "(native: the source fill DN, see bandSets nodata; float32: NaN)"),
             "resampling": ("none: read on the provider's native tile grid" if cfg.aoi.tiles else
                            "bilinear for reflectance, nearest for QA"),
             "normalizationApplied": [],
@@ -566,7 +590,9 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
         for tmp in root.glob("*/*/composites/*.tif.tmp"):
             tmp.unlink()
         plan, grid_infos = discover(config, provider, today=today, log=log)
-        core = manifest_core(plan, provider, grid_infos)
+        software = software_info()
+        run_info = writer.begin_run(software)
+        core = manifest_core(plan, provider, grid_infos, software)
         ctx = _RunContext(config=config, provider=provider, root=root, today=plan.today,
                           bands_needed=list(config.output.bands) + sorted(
                               required_raw_bands(config.output.indices) - set(config.output.bands)))
@@ -602,10 +628,11 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
             counter["attempts"] += 1
             if err is not None:
                 row = {**_row_base(u), "status": "failed", "attempts": attempts + 1,
-                       "error": redact_urls(f"{type(err).__name__}: {err}")[:1000]}
+                       "error": redact_urls(f"{type(err).__name__}: {err}")[:1000], "software": software}
                 log(f"[run] {u.key} FAILED (attempt {attempts + 1}/{config.max_attempts}): {row['error'][:300]}")
             else:
                 row["attempts"] = attempts + 1
+                row["software"] = software
                 counter["done"] += 1
             writer.record(row)
             now = time.monotonic()
@@ -669,6 +696,7 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
                                 continue
                             if fu.exception() is None:
                                 finish(u, a, fu.result(), None)
+                        run_info.update(finished=_now_utc(), interrupted=True, acquired=counter["done"])
                         writer.write_catalog(core, complete=False)
                         raise
                     pending = sorted(retry, key=lambda ua: ua[0].key)
@@ -676,6 +704,7 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
                                                              if r.get("status") == "acquired"})
 
         counts = writer.counts()
+        run_info.update(finished=_now_utc(), acquired=counter["done"], failed=counter["failed"])
         manifest = writer.write_catalog(core, complete=counts["pending"] == 0 and counts["failed"] == 0)
         log(f"[run] done: {counter['done']} acquired, {counter['failed']} failed this run; dataset: "
             + ", ".join(f"{k} {v}" for k, v in counts.items() if v))

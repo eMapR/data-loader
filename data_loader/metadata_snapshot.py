@@ -12,6 +12,7 @@ reshaped; only the small "snapshot" wrapper is DataLoader's own.
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,15 +29,24 @@ def snapshot_ref(provider: str, item_id: str) -> str:
     return f"metadata/{provider}/{sanitize_filename(item_id)}.json"
 
 
+def _readable(path: Path) -> bool:
+    try:
+        json.loads(path.read_text())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def write_snapshot(output_dir: Path, provider: str, item_id: str, source_record: dict) -> str:
-    """Idempotent: if a snapshot for this (provider, item_id) already
-    exists on disk -- from earlier in this run, or from an earlier run
-    writing to the same output_dir -- it is left untouched rather than
-    rewritten. Returns the relative ref regardless of whether a write
-    happened."""
+    """Idempotent: if a complete snapshot for this (provider, item_id)
+    already exists on disk -- from earlier in this run, or from an earlier
+    run writing to the same output_dir -- it is left untouched. One cut
+    short by a crash (not valid JSON) is rewritten. Written via a temp file
+    + rename, so a snapshot under its final name is always complete.
+    Returns the relative ref regardless of whether a write happened."""
     rel_path = snapshot_ref(provider, item_id)
     full_path = Path(output_dir) / rel_path
-    if not full_path.exists():
+    if not full_path.exists() or not _readable(full_path):
         full_path.parent.mkdir(parents=True, exist_ok=True)
         doc = {
             "snapshot": {
@@ -47,5 +57,7 @@ def write_snapshot(output_dir: Path, provider: str, item_id: str, source_record:
             },
             "sourceRecord": source_record,
         }
-        full_path.write_text(json.dumps(doc, indent=2, default=str))
+        tmp = full_path.with_name(full_path.name + ".tmp")
+        tmp.write_text(json.dumps(doc, indent=2, default=str))
+        os.replace(tmp, full_path)
     return rel_path

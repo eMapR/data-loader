@@ -71,6 +71,17 @@ class WriteSnapshotTests(unittest.TestCase):
             self.assertEqual(full_path.stat().st_mtime_ns, original_mtime)
             self.assertEqual(json.loads(full_path.read_text())["sourceRecord"], {"v": 1})
 
+    def test_snapshot_cut_short_by_a_crash_is_rewritten(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            full_path = Path(tmp) / snapshot_ref("p", "id1")
+            full_path.parent.mkdir(parents=True)
+            full_path.write_text('{"snapshot": {"capturedBy"')
+            write_snapshot(Path(tmp), "p", "id1", {"v": 1})
+            self.assertEqual(json.loads(full_path.read_text())["sourceRecord"], {"v": 1})
+            self.assertEqual(list(full_path.parent.glob("*.tmp")), [])
+
 
 # --------------------------------------------------------------------------
 # 2. StacProvider.source_metadata -- durable identity vs. ephemeral hrefs

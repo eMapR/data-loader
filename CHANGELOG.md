@@ -14,6 +14,30 @@
   datatake can't be determined is never grouped with others. Earth Search
   was not affected (it has `grid:code`). Provenance `extra.mgrs_tile` is
   recorded for every Sentinel-2 item.
+- **QA band nodata in the manifest** is now the file's nodata (`0` native,
+  `NaN` float32), matching the GeoTIFF; 1.0 said `null`.
+- Error messages no longer show `?<redacted><redacted>`.
+
+### Output contract: manifest schema 1.1 (additive)
+- `files[].bandScaleOffset` is written for **every** band of every
+  `bands` file (1.0 wrote it only when it differed from `bandSets`) and is
+  the authoritative scale/offset. The docs' reading example now uses it;
+  the old example applied the band-set offset, which is 0.1 off for
+  Planetary Computer Sentinel-2 from 2022 on.
+- `software` (DataLoader version, git commit, dirty flag) on every
+  acquired/failed row; `dataset.runs` lists every run into the directory;
+  `dataset.gitDirty`.
+- `data-loader upgrade DIR [--run START=COMMIT ...] [--dry-run]
+  [--check-files N]` brings a 1.0 dataset's metadata to 1.1 without
+  touching imagery. 1.0 datasets stay readable and resumable as they are.
+- A writer refuses a dataset of an unknown major schema version instead of
+  rewriting it.
+
+### Reliability
+- manifest.json, items.jsonl, GeoTIFFs and the run journal are flushed to
+  disk (fsync) before they replace the previous version, so a power loss
+  can't leave an empty `items.jsonl`. Metadata snapshots are written
+  atomically, and one cut short by a crash is rewritten.
 
 ## 1.0.0 (2026-10-07)
 

@@ -50,6 +50,8 @@ def write_raster(path: Path, bands: dict[str, np.ndarray], grid: Grid, *, dtype:
             dst.offsets = [float(offsets.get(n, 0.0)) for n in names]
         if tags:
             dst.update_tags(**{k: str(v) for k, v in tags.items() if v is not None})
+    with open(tmp, "rb+") as f:  # on disk before it gets its final name
+        os.fsync(f.fileno())
     os.replace(tmp, path)
     return names
 

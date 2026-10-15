@@ -30,14 +30,15 @@ from rasterio.transform import Affine
 
 from data_loader.product_contract import AcquisitionProvenance, ProductIdentity
 
-_URL_QUERY_RE = re.compile(r"(https?://[^\s?#'\"<>]+)\?[^\s'\"<>]*")
+_URL_QUERY_RE = re.compile(r"(https?://[^\s?#'\"<>]+)\?(?!<redacted>)[^\s'\"<>]*")
 
 
 def redact_urls(text) -> str:
     """`text` with the query string of every URL replaced by `?<redacted>`.
     Signed download URLs carry credentials there (USGS `requestSignature`,
     Planetary Computer SAS tokens); the path still names the file. Use on
-    any message that may quote a URL before it reaches a log or an output."""
+    any message that may quote a URL before it reaches a log or an output.
+    Idempotent: already-redacted text is unchanged."""
     return _URL_QUERY_RE.sub(r"\1?<redacted>", str(text))
 
 

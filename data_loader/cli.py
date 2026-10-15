@@ -5,6 +5,7 @@
     data-loader run CONFIG          acquire; re-run the same command to resume or update
     data-loader status DIR          progress of a dataset (no network)
     data-loader verify DIR          check every file against the manifest (size + sha256)
+    data-loader upgrade DIR         bring an older dataset's manifest/items to the current schema
 
 Exit codes: 0 ok; 1 unexpected error; 2 invalid config/request;
 3 run finished but some acquisitions are failed or still pending
@@ -114,6 +115,35 @@ def cmd_verify(args) -> int:
     return 0
 
 
+def cmd_upgrade(args) -> int:
+    from data_loader.upgrade import parse_run, upgrade_dataset
+
+    try:
+        runs = [parse_run(r) for r in args.run or []]
+    except ValueError as e:
+        raise ConfigError(str(e)) from None
+    r = upgrade_dataset(args.dir, runs=runs, dry_run=args.dry_run, check_files=args.check_files)
+    print(f"{args.dir}: schema {r.from_version} -> {r.to_version}" + (" (dry run, nothing written)"
+                                                                      if args.dry_run else ""))
+    print(f"  rows {r.rows}; files given full per-band scale/offset: {r.files_scale_offset_added}")
+    for sensor, nd in r.qa_nodata_set:
+        print(f"  {sensor}: QA band nodata set to the file's nodata ({nd})")
+    for commit, n in r.rows_software_attributed.items():
+        print(f"  rows attributed to {commit}: {n}")
+    if r.rows_without_software:
+        print(f"  acquired/failed rows left without software (no --run covers them): {r.rows_without_software}")
+    if r.errors_cleaned:
+        print(f"  error messages with doubled redaction cleaned: {r.errors_cleaned}")
+    if args.check_files:
+        print(f"  checked {r.checked_files} file(s) against the metadata: "
+              + ("OK" if not r.check_problems else f"{len(r.check_problems)} problem(s)"))
+        for p in r.check_problems[:20]:
+            print(f"    {p}")
+    if not args.dry_run and not r.written:
+        print("  already current: nothing written")
+    return 4 if r.check_problems else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="data-loader", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -136,6 +166,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("dir")
     sp.add_argument("--no-checksums", action="store_true", help="sizes only (fast)")
     sp.set_defaults(fn=cmd_verify)
+    sp = sub.add_parser("upgrade", help="upgrade a dataset's metadata to the current schema (no imagery is touched)")
+    sp.add_argument("dir")
+    sp.add_argument("--run", action="append", metavar="START=COMMIT",
+                    help="a past run's start time (UTC, ISO 8601) and git commit; repeat for each run. "
+                         "Rows written after START are attributed to COMMIT")
+    sp.add_argument("--dry-run", action="store_true", help="report what would change; write nothing")
+    sp.add_argument("--check-files", type=int, default=0, metavar="N",
+                    help="also open N sampled files and compare their scale/offset/nodata with the metadata")
+    sp.set_defaults(fn=cmd_upgrade)
     return p
 
 

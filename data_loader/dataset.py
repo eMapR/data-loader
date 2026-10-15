@@ -25,7 +25,7 @@ from typing import Iterator, Optional
 from data_loader.config import request_identity
 
 MANIFEST_SCHEMA = "dataloader-manifest"
-MANIFEST_VERSION = "1.0"
+MANIFEST_VERSION = "1.1"
 STATE_DIR = ".state"
 STATUSES = ("acquired", "failed", "pending", "filtered")
 
@@ -38,10 +38,33 @@ def _now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _fsync_dir(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:  # pragma: no cover - platforms without directory fds
+        return
+    try:
+        os.fsync(fd)
+    except OSError:  # pragma: no cover
+        pass
+    finally:
+        os.close(fd)
+
+
 def _atomic_write(path: Path, text: str) -> None:
+    """Write via a temp file + rename, flushed to disk before and after the
+    rename, so a crash or power loss leaves either the old or the new file."""
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text)
+    with open(tmp, "w") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, path)
+    _fsync_dir(path.parent)
+
+
+def _major(version) -> str:
+    return str(version or "0").split(".")[0]
 
 
 def _read_jsonl(path: Path) -> list[dict]:
@@ -90,11 +113,16 @@ class DatasetWriter:
         self.request = request
         manifest_path = self.root / "manifest.json"
         self.created = _now()
+        self.runs: list[dict] = []  # dataset.runs: one entry per run into this directory
         if manifest_path.exists():
             old = json.loads(manifest_path.read_text())
             if old.get("schema") != MANIFEST_SCHEMA:
                 self.close()
                 raise DatasetError(f"{self.root}: manifest.json is not a DataLoader {MANIFEST_VERSION} manifest")
+            if _major(old.get("schemaVersion")) != _major(MANIFEST_VERSION):
+                self.close()
+                raise DatasetError(f"{self.root}: manifest schema {old.get('schemaVersion')} was written by an "
+                                   f"incompatible DataLoader (this one writes {MANIFEST_VERSION}); not modifying it")
             diff = _diff_keys(request_identity(old.get("request", {})), request_identity(request))
             if diff:
                 self.close()
@@ -103,6 +131,7 @@ class DatasetWriter:
                     "Use a new output.dir; only the end of the time range, workers, max_attempts and "
                     "provider_options may change between runs into the same directory.")
             self.created = old.get("dataset", {}).get("created", self.created)
+            self.runs = list(old.get("dataset", {}).get("runs") or [])
         elif any(p for p in self.root.iterdir() if p.name != STATE_DIR):
             self.close()
             raise DatasetError(f"{self.root} is not empty and has no manifest.json; "
@@ -143,6 +172,7 @@ class DatasetWriter:
             self._rows[row["key"]] = row
             self._journal.write(json.dumps(row, default=str) + "\n")
             self._journal.flush()
+            os.fsync(self._journal.fileno())
             self._since_catalog += 1
 
     def note(self, row: dict) -> None:
@@ -152,6 +182,13 @@ class DatasetWriter:
             old = self._rows.get(row["key"])
             if old is None or old.get("status") in ("pending", "filtered"):
                 self._rows[row["key"]] = row
+
+    def begin_run(self, software: dict) -> dict:
+        """Start a dataset.runs entry for this run; the caller fills in its
+        outcome. Returned dict is live (written by every write_catalog)."""
+        run = {"started": _now(), "finished": None, **software}
+        self.runs.append(run)
+        return run
 
     @property
     def since_catalog(self) -> int:
@@ -178,6 +215,7 @@ class DatasetWriter:
 
         rows = self.rows()
         with self._mutex:
+            # items.jsonl reaches disk before the journal that duplicates it is emptied
             _atomic_write(self.root / "items.jsonl", "".join(json.dumps(r, default=str) + "\n" for r in rows))
             self._journal.close()
             self._journal = open(self.state / "journal.jsonl", "w")
@@ -191,7 +229,7 @@ class DatasetWriter:
             "schema": MANIFEST_SCHEMA,
             "schemaVersion": MANIFEST_VERSION,
             "dataset": {**manifest_core.get("dataset", {}), "created": self.created, "updated": _now(),
-                        "complete": complete},
+                        "complete": complete, "runs": self.runs},
             **{k: v for k, v in manifest_core.items() if k not in ("dataset", "coverage")},
             "coverage": {**manifest_core.get("coverage", {}), "counts": counts,
                          "firstAcquired": dates[0] if dates else None,
@@ -217,7 +255,7 @@ class Dataset:
     """Read side of the contract:
 
         ds = open_dataset("/path/to/dataset")
-        ds.manifest["bandSets"]["bands"]          # band order, dtype, scale/offset, nodata
+        ds.manifest["bandSets"]["landsat"]["bands"]   # band order, dtype, nodata, QA meaning
         for path, item, f in ds.files(grid="h003v004", start="2000-01-01"):
             ...                                    # path is absolute; item is the items.jsonl row
     """
@@ -230,8 +268,7 @@ class Dataset:
         self.manifest = json.loads(mp.read_text())
         if self.manifest.get("schema") != MANIFEST_SCHEMA:
             raise DatasetError(f"{mp}: not a {MANIFEST_SCHEMA} manifest")
-        major = str(self.manifest.get("schemaVersion", "0")).split(".")[0]
-        if major != MANIFEST_VERSION.split(".")[0]:
+        if _major(self.manifest.get("schemaVersion")) != _major(MANIFEST_VERSION):
             raise DatasetError(f"{mp}: manifest schema {self.manifest.get('schemaVersion')} is not readable by "
                                f"this DataLoader (reads {MANIFEST_VERSION})")
 

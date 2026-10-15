@@ -639,6 +639,7 @@ class RedactUrlsTests(unittest.TestCase):
         self.assertIn("https://landsatlook.usgs.gov/tile/c2/LC09_SR_B5.TIF?<redacted>", out)
         self.assertIn("https://x.blob.core.windows.net/a.tif?<redacted>'", out)
         self.assertEqual(redact_urls("no url here: a?b"), "no url here: a?b")
+        self.assertEqual(redact_urls(out), out)  # idempotent: no "?<redacted><redacted>"
 
     def test_download_failure_message_is_redacted(self):
         import io

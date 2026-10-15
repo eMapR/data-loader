@@ -30,7 +30,7 @@ class ManifestContentTests(unittest.TestCase):
             run_with(FakeProvider(july(2), native=True), make_config(tmp, output=ARCHIVE))
             m = _manifest(tmp)
             row = read_items(tmp)[0]
-        self.assertEqual((m["schema"], m["schemaVersion"]), ("dataloader-manifest", "1.0"))
+        self.assertEqual((m["schema"], m["schemaVersion"]), ("dataloader-manifest", "1.1"))
         self.assertEqual(m["request"]["provider"], "fake")
         self.assertTrue(m["dataset"]["complete"])
         bands = m["bandSets"]["landsat"]["bands"]
@@ -50,6 +50,33 @@ class ManifestContentTests(unittest.TestCase):
         self.assertEqual(f["bandSet"], "bands")
         self.assertTrue(f["path"].startswith("landsat/aoi/2023/2023-07-01_scene-0_bands"))
         self.assertEqual(len(f["sha256"]), 64)
+        # 1.1: per-file scale/offset for every band in the file, always
+        self.assertEqual(f["bandScaleOffset"], {"blue": [2.75e-5, -0.2], "nir": [2.75e-5, -0.2],
+                                                "qa_pixel": [1.0, 0.0]})
+        # 1.1: QA nodata is the file's nodata (GeoTIFF has one per file)
+        self.assertEqual(bands[2]["nodata"], 0)
+        # 1.1: software provenance per row and per run
+        self.assertEqual(row["software"]["dataloaderVersion"], m["dataset"]["dataloaderVersion"])
+        self.assertIn("gitCommit", row["software"])
+        runs = m["dataset"]["runs"]
+        self.assertEqual(len(runs), 1)
+        self.assertEqual((runs[0]["acquired"], runs[0]["failed"]), (2, 0))
+        self.assertIsNotNone(runs[0]["finished"])
+
+    def test_runs_accumulate_across_resumes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_with(FakeProvider(july(2), native=True), make_config(tmp, output=ARCHIVE))
+            run_with(FakeProvider(july(3), native=True), make_config(tmp, output=ARCHIVE))
+            runs = _manifest(tmp)["dataset"]["runs"]
+        self.assertEqual([r["acquired"] for r in runs], [2, 1])
+
+    def test_float32_files_record_identity_scale_offset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_with(FakeProvider(july(1), native=True),
+                     make_config(tmp, output={"bands": ["red", "nir"], "qa_band": True}))
+            m, f = _manifest(tmp), read_items(tmp)[0]["files"][0]
+        self.assertEqual(f["bandScaleOffset"], {"red": [1.0, 0.0], "nir": [1.0, 0.0], "qa_pixel": [1.0, 0.0]})
+        self.assertEqual(m["bandSets"]["landsat"]["bands"][2]["nodata"], "NaN")
 
     def test_mask_rules_recorded_when_applied(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -271,6 +298,33 @@ class DirectoryProtectionTests(unittest.TestCase):
                     DatasetWriter(tmp, make_config(tmp).to_dict())
             finally:
                 w.close()
+
+    def test_newer_major_schema_is_not_modified(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_with(FakeProvider(july(1)), make_config(tmp))
+            mp = Path(tmp) / "manifest.json"
+            m = json.loads(mp.read_text())
+            m["schemaVersion"] = "2.0"
+            mp.write_text(json.dumps(m))
+            with self.assertRaisesRegex(DatasetError, "incompatible DataLoader"):
+                run_with(FakeProvider(july(1)), make_config(tmp))
+            with self.assertRaisesRegex(DatasetError, "not readable"):
+                open_dataset(tmp)
+            self.assertEqual(json.loads(mp.read_text())["schemaVersion"], "2.0")
+
+    def test_1_0_dataset_is_resumed_and_upgraded_in_place(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run_with(FakeProvider(july(1), native=True), make_config(tmp, output=ARCHIVE))
+            mp = Path(tmp) / "manifest.json"
+            m = json.loads(mp.read_text())
+            m["schemaVersion"] = "1.0"
+            del m["dataset"]["runs"]
+            mp.write_text(json.dumps(m))
+            s = run_with(FakeProvider(july(2), native=True), make_config(tmp, output=ARCHIVE))
+            m = json.loads(mp.read_text())
+        self.assertEqual((s.already_done, s.acquired_now), (1, 1))
+        self.assertEqual(m["schemaVersion"], "1.1")
+        self.assertEqual(len(m["dataset"]["runs"]), 1)
 
     def test_interrupted_journal_line_is_ignored(self):
         p = FakeProvider(july(2))
