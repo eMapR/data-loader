@@ -1,0 +1,186 @@
+{
+ "spec": "aois.yaml",
+ "built": "2026-10-20T17:18:21+00:00",
+ "builder": "bench/prepare_aois.py",
+ "crs": "EPSG:4326",
+ "aois": [
+  {
+   "id": "nccn_olym_lpa01",
+   "name": "NCCN Olympic National Park, LPa01 10-mile-buffer study area",
+   "program": "NCCN",
+   "file": "nccn_olym_lpa01.geojson",
+   "file_sha256": "1edfd0d11595d95e376aa460afdaf31de713c70b4bf9f02fe0d7757c58df6c28",
+   "source": {
+    "path": "/Users/clarype/Documents/prithvi/prithvi-reference-assessment/data/raw/boundaries/nps/Prithvi_NCCN/LPa01_LEWI_MORA_NOCA_OLYM.shp",
+    "where": {
+     "PARK_CODE": "OLYM"
+    },
+    "crs": "ESRI:102039",
+    "crs_name": "USA_Contiguous_Albers_Equal_Area_Conic_USGS_version",
+    "sha256": {
+     "LPa01_LEWI_MORA_NOCA_OLYM.cpg": "3ad3031f5503a4404af825262ee8232cc04d4ea6683d42c5dd0a2f2a27ac9824",
+     "LPa01_LEWI_MORA_NOCA_OLYM.dbf": "3760de1ad7a3be5c193893c60c66801b172bdd2b8bd6c5dbbe4484f6837581a6",
+     "LPa01_LEWI_MORA_NOCA_OLYM.prj": "c2e102c73fba08ebaef452664acd997cb9d3d8668864c117a8323b23e0837e95",
+     "LPa01_LEWI_MORA_NOCA_OLYM.sbn": "a0dc5e149375bd295d5a11b0bb663aae790ad4e3cdd49816f6c96ed78a8d059f",
+     "LPa01_LEWI_MORA_NOCA_OLYM.sbx": "27f1e7dc8a25e7347b677cb3b59df2e81db68b35a27f52c6878b93f212aae580",
+     "LPa01_LEWI_MORA_NOCA_OLYM.shp": "435f327e54e3e6f5457b65da8897878ba95c32b626e8f43966ebc4667201e53f",
+     "LPa01_LEWI_MORA_NOCA_OLYM.shp.xml": "b523f19d55c5e7880c96e5ca1c5a414542b5bf7519d9efd23c79de7d3448d71c",
+     "LPa01_LEWI_MORA_NOCA_OLYM.shx": "7b7107db57920307b2452e4074779155e6eb8a5eabce99220660165832bfa78e",
+     "LPa01_LEWI_MORA_NOCA_OLYM.zip": "70bfc86e6e17171b0c2faf1cca6f5d6993fa3422a1765b6afacd026b3da0d394"
+    }
+   },
+   "geometry": {
+    "type": "Polygon",
+    "parts": 1,
+    "area_km2": 11476.2,
+    "area_crs": "EPSG:5070",
+    "bbox_lonlat": [
+     -124.736203,
+     47.278244,
+     -122.84945,
+     48.391786
+    ]
+   },
+   "checks": {
+    "features_selected": 1,
+    "features_ok": true,
+    "area_ok": true,
+    "invalid_source_features": 0,
+    "output_valid": true
+   },
+   "note": "Original (1985-2010) NCCN Landscape Dynamics study area. Chosen over the 4,039 km2 Protected Areas AOI for more coverage; contains it entirely."
+  },
+  {
+   "id": "glkn_slbe_landtrendr",
+   "name": "GLKN Sleeping Bear Dunes National Lakeshore, LandTrendr analysis area",
+   "program": "GLKN",
+   "file": "glkn_slbe_landtrendr.geojson",
+   "file_sha256": "02b9d54cef382e25e34debfbfe2f28e5f58e32a826366f7a50a30a2764869ddb",
+   "source": {
+    "path": "/Users/clarype/Documents/prithvi/prithvi-reference-assessment/data/raw/boundaries/glkn/GLKN_LandTrendr_AOIs.shp",
+    "where": {
+     "park": "slbe"
+    },
+    "crs": "ESRI:102039",
+    "crs_name": "USA_Contiguous_Albers_Equal_Area_Conic_USGS_version",
+    "sha256": {
+     "GLKN_LandTrendr_AOIs.cpg": "3ad3031f5503a4404af825262ee8232cc04d4ea6683d42c5dd0a2f2a27ac9824",
+     "GLKN_LandTrendr_AOIs.dbf": "7debca8f2826355ffe734bbc34bdf1492e76e022b4f92602e253ce7ba9d54619",
+     "GLKN_LandTrendr_AOIs.prj": "c2e102c73fba08ebaef452664acd997cb9d3d8668864c117a8323b23e0837e95",
+     "GLKN_LandTrendr_AOIs.sbn": "74f355d47c7b4307e65fd3235c2acdeca5c3cbf20d8ac9c09622dce8fb3aa4a0",
+     "GLKN_LandTrendr_AOIs.sbx": "41bada259cfe1b971d8c0fe1f5ef89da68e2a0a120d44f0817b1573b07167095",
+     "GLKN_LandTrendr_AOIs.shp": "b9d47019070c0538abbbac4a2891cf50ca385f31286cfab8e932008d2a66e41d",
+     "GLKN_LandTrendr_AOIs.shp.xml": "55ec15d8ed601aadf3d214130698a693a979318c66e8cb2574cf0a12bc9d9460",
+     "GLKN_LandTrendr_AOIs.shx": "7176803f2c5515040745083d0795e01c266ff91f32a607a0d0c248eefe7e47f2"
+    }
+   },
+   "geometry": {
+    "type": "MultiPolygon",
+    "parts": 3,
+    "area_km2": 2382.6,
+    "area_crs": "EPSG:5070",
+    "bbox_lonlat": [
+     -86.259136,
+     44.470382,
+     -85.464433,
+     45.211193
+    ]
+   },
+   "checks": {
+    "features_selected": 1,
+    "features_ok": true,
+    "area_ok": true,
+    "invalid_source_features": 0,
+    "output_valid": true
+   },
+   "note": "GLKN's own LandTrendr AOI (embedded lineage); contains 99.5% of the NPS SLBE unit."
+  },
+  {
+   "id": "usfs_r6_columbia_mtns_wa",
+   "name": "USFS Region 6, EPA Level III ecoregion 15 (Columbia Mountains/Northern Rockies), Washington portion",
+   "program": "USFS R6 ADS",
+   "file": "usfs_r6_columbia_mtns_wa.geojson",
+   "file_sha256": "603fcef863c8228a142e8044e9df10f75f0401358ca1786eb59cf9a6689f19c2",
+   "source": {
+    "path": "/Users/clarype/Documents/prithvi/prithvi-reference-assessment/data/raw/boundaries/ads_r6/BugNet_R6_Regions.shp",
+    "where": {
+     "us_l3code": "15",
+     "STATE": "WA"
+    },
+    "crs": "EPSG:4326",
+    "crs_name": "WGS 84",
+    "sha256": {
+     "BugNet_R6_Regions.cpg": "3ad3031f5503a4404af825262ee8232cc04d4ea6683d42c5dd0a2f2a27ac9824",
+     "BugNet_R6_Regions.dbf": "29d8ab0cf1e5efb221c998813e56dcbc475fc761302ef0ea111b06c3090381a3",
+     "BugNet_R6_Regions.fix": "da5b642b504fae5ee2ba7c83bd5d3479da974fd935b40a391494c623875248eb",
+     "BugNet_R6_Regions.prj": "de5c1395a1ffc517ee2112b217c89595d01a7944eb65374c06547d4771b29167",
+     "BugNet_R6_Regions.shp": "f72ab859196660bbe31c2a1c6e88c0342ea3978d363bb1d63ad10cf4799fd2c1",
+     "BugNet_R6_Regions.shx": "cc5d2c69f89ff932401f3f0fefdc788705dd654f5a12572372b246e88eefb5ed"
+    }
+   },
+   "geometry": {
+    "type": "MultiPolygon",
+    "parts": 2,
+    "area_km2": 21422.0,
+    "area_crs": "EPSG:5070",
+    "bbox_lonlat": [
+     -119.4964,
+     47.259303,
+     -117.032098,
+     49.000747
+    ]
+   },
+   "checks": {
+    "features_selected": 1,
+    "features_ok": true,
+    "area_ok": true,
+    "invalid_source_features": 0,
+    "output_valid": true
+   },
+   "note": "WA portion only (as clipped in the BugNet R6 set); no Idaho or Montana."
+  },
+  {
+   "id": "usfs_r10_northern_se_alaska",
+   "name": "USFS Region 10, HUC6 190103 Northern Southeast Alaska",
+   "program": "USFS R10 ADS",
+   "file": "usfs_r10_northern_se_alaska.geojson",
+   "file_sha256": "43c27329df6da00b91d798cbd6f4fe00f348c60b8f1399330f818c0bb8abcb91",
+   "source": {
+    "path": "/Users/clarype/Documents/prithvi/prithvi-reference-assessment/data/raw/boundaries/ads_r10/AK_HUC6_boundaries/AK_HUC6_Northern_Southeast_Alaska.shp",
+    "where": {
+     "huc6": "190103"
+    },
+    "crs": "EPSG:3338",
+    "crs_name": "NAD83 / Alaska Albers",
+    "sha256": {
+     "AK_HUC6_Northern_Southeast_Alaska.cpg": "3ad3031f5503a4404af825262ee8232cc04d4ea6683d42c5dd0a2f2a27ac9824",
+     "AK_HUC6_Northern_Southeast_Alaska.dbf": "45eb9c354bfcf56129064be287154aa7448882500a088ba5a84cabfbf8bd72a6",
+     "AK_HUC6_Northern_Southeast_Alaska.fix": "1f84ee8e6d835074df79102e1239a6aa417f27618b7da143cb277f994933f1c9",
+     "AK_HUC6_Northern_Southeast_Alaska.prj": "91fe3d549e30619be55fc26fdeed042b65ae7013bdabc15d7964d52bd20094a9",
+     "AK_HUC6_Northern_Southeast_Alaska.shp": "e85ece5701cad34239b2972cdf4936d3ce8d982fa49fa71037c14ea5004e60f2",
+     "AK_HUC6_Northern_Southeast_Alaska.shx": "8f6c73d64a3897efc7b16ccbdd25fa7a39f4d9efb8faf8502c9c4c038986df21"
+    }
+   },
+   "geometry": {
+    "type": "MultiPolygon",
+    "parts": 3,
+    "area_km2": 28387.6,
+    "area_crs": "EPSG:3338",
+    "bbox_lonlat": [
+     -137.734661,
+     58.144165,
+     -132.809773,
+     59.889291
+    ]
+   },
+   "checks": {
+    "features_selected": 1,
+    "features_ok": true,
+    "area_ok": true,
+    "invalid_source_features": 0,
+    "output_valid": true
+   },
+   "note": "WBD HUC6; states=AK,CN, i.e. the basin extends into British Columbia/Yukon."
+  }
+ ]
+}

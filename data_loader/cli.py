@@ -35,16 +35,23 @@ def _load(args):
 
 
 def cmd_validate(args) -> int:
-    from data_loader.engine import check_request
+    from data_loader.engine import check_request, make_provider
 
     cfg = _load(args)
-    warnings = check_request(cfg)
+    provider = make_provider(cfg)
+    warnings = check_request(cfg, provider)
     windows = cfg.time.windows()
     print(f"OK: {args.config}")
     print(f"  provider {cfg.provider}, sensors {', '.join(s.name for s in cfg.sensors)}, "
           f"temporal_mode {cfg.temporal_mode}, encoding {cfg.output.encoding}")
-    print(f"  aoi: " + (f"tiles {', '.join(cfg.aoi.tiles)}" if cfg.aoi.tiles
-                        else f"bbox {cfg.aoi.upper_left} -> {cfg.aoi.lower_right}"))
+    if cfg.aoi.tiles:
+        print(f"  aoi: {len(cfg.aoi.tiles)} tile(s)")
+        for t in cfg.aoi.tiles:  # region + where it is, so a tile on the wrong grid shows here
+            d = provider.tile_grid.describe(t)
+            w, s_, e, n = d["bboxLonLat"]
+            print(f"    {d['id']:<12} {d['system']:<16} lon {w:8.2f}..{e:8.2f}  lat {s_:6.2f}..{n:6.2f}")
+    else:
+        print(f"  aoi: bbox {cfg.aoi.upper_left} -> {cfg.aoi.lower_right}")
     if windows:
         print(f"  time: {len(windows)} window(s) {windows[0].start}..{windows[-1].end}"
               + (" (open-ended: re-running later adds newer imagery)" if cfg.time.open_ended else ""))
@@ -59,13 +66,13 @@ def cmd_plan(args) -> int:
 
     s = plan_summary(_load(args), log=_log)
     print(f"\n{s['temporalMode']} units over {s['span'][0]}..{s['span'][1]} ({s['windows']} window(s)):")
-    print(f"  {'sensor':10} {'grid':10} {'units':>7} {'acquired':>9} {'to do':>7} {'filtered':>9}")
+    print(f"  {'sensor':10} {'grid':12} {'units':>7} {'acquired':>9} {'to do':>7} {'filtered':>9}")
     for r in s["grids"]:
-        print(f"  {r['sensor']:10} {r['grid']:10} {r['units']:7d} {r['acquired']:9d} "
+        print(f"  {r['sensor']:10} {r['grid']:12} {r['units']:7d} {r['acquired']:9d} "
               f"{r['units'] - r['acquired']:7d} {r['filtered']:9d}")
     tot = sum(r["units"] for r in s["grids"])
     done = sum(r["acquired"] for r in s["grids"])
-    print(f"  {'total':21} {tot:7d} {done:9d} {tot - done:7d}")
+    print(f"  {'total':23} {tot:7d} {done:9d} {tot - done:7d}")
     for w in s["warnings"]:
         print(f"warning: {w}")
     return 0

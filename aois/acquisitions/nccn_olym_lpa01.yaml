@@ -1,0 +1,42 @@
+# NCCN Olympic National Park, LPa01 10-mile-buffer study area (11,476 km2).
+# Complete native USGS ARD tiles, every Landsat observation 1990-present, as
+# USGS distributes them: uint16 DN + QA_PIXEL, no cloud filter, no pixel
+# masking, no resampling -- the same product spec as the Oregon archive.
+# Tiles: every ARD tile intersecting aois/nccn_olym_lpa01.geojson (bench/study_area_ard_plan.py),
+# ordered by share of the AOI, edge tiles included.
+# Plan (2026-10-20): 7,543 observations, ~0.6 TB stored, ~0.83 TB downloaded,
+# ~0.7-0.9 days on one M2M account (aois/ard_tile_plan.json).
+# h003v002 holds 8.3% of this AOI and is NOT listed here: it is already in the
+# Oregon archive (examples/oregon_landsat_ard_archive.yaml). Olympic's complete
+# coverage = this dataset + Oregon's h003v002 (aois/registry.json).
+# Set the location with --output-dir, e.g.:
+#   data-loader plan aois/acquisitions/nccn_olym_lpa01.yaml --output-dir /vol/v1/data/nccn_olym_lpa01_landsat_ard
+#   data-loader run  aois/acquisitions/nccn_olym_lpa01.yaml --output-dir /vol/v1/data/nccn_olym_lpa01_landsat_ard
+version: 1
+provider: usgs_ard
+sensors:
+  - name: landsat
+    product_family: usgs_ard_sr        # fail rather than accept a different product
+
+aoi:
+  tiles:
+    - h003v001                #  87.3% of AOI, 4,409 obs
+    - h002v001                #   4.4% of AOI, 3,134 obs
+
+time:
+  start_year: 1990                     # no end_year: through today
+
+temporal_mode: scene
+
+filters:
+  max_cloud_percent: 100
+  pixel_cloud_mask: false
+
+output:
+  dir: data/nccn_olym_lpa01_landsat_ard
+  encoding: native
+  bands: [blue, green, red, nir, swir1, swir2]
+  qa_band: true
+
+workers: 4
+max_attempts: 3

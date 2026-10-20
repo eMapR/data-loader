@@ -1,0 +1,486 @@
+{
+ "built": "2026-10-20",
+ "period": [
+  "1990-01-01",
+  "2026-10-20"
+ ],
+ "model": {
+  "basis": "Oregon archive run (DataLoader 1.0, 4 workers, one M2M account, Oct 2026)",
+  "stored_gb_per_data_equiv": 0.2123,
+  "transfer_gb_per_data_equiv": 0.2923,
+  "obs_per_day": [
+   8300,
+   10500
+  ],
+  "sliver_fill_threshold": 80,
+  "data_equiv": "sum over observations of (100 - landsat:fill)/100"
+ },
+ "grids": {
+  "CU": {
+   "proj4": "+proj=aea +lat_0=23 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
+   "ul": [
+    -2565585.0,
+    3314805.0
+   ]
+  },
+  "AK": {
+   "proj4": "+proj=aea +lat_0=50 +lon_0=-154 +lat_1=55 +lat_2=65 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs",
+   "ul": [
+    -2201715.0,
+    2474325.0
+   ]
+  }
+ },
+ "all_aois_unique_tiles": {
+  "tiles": 14,
+  "observations": 50396,
+  "stored_tb": 4.67,
+  "transfer_tb": 6.44
+ },
+ "all_aois_unique_new_tiles": {
+  "tiles": 13,
+  "observations": 45740,
+  "stored_tb": 4.29,
+  "transfer_tb": 5.91,
+  "days": [
+   4.3,
+   5.5
+  ]
+ },
+ "aois": [
+  {
+   "aoi_id": "nccn_olym_lpa01",
+   "grid_region": "CU",
+   "total": {
+    "tiles": 3,
+    "observations": 12199,
+    "slivers": 5825,
+    "stored_tb": 0.98,
+    "transfer_tb": 1.35,
+    "days": [
+     1.2,
+     1.5
+    ]
+   },
+   "new_vs_oregon_archive": {
+    "tiles": 2,
+    "observations": 7543,
+    "slivers": 3657,
+    "stored_tb": 0.6,
+    "transfer_tb": 0.83,
+    "days": [
+     0.7,
+     0.9
+    ]
+   },
+   "tiles": [
+    {
+     "tile": "h003v001",
+     "region": "CU",
+     "aoi_share": 0.8729,
+     "tile_covered": 0.4452,
+     "bbox": [
+      -124.8071,
+      47.2775,
+      -122.3221,
+      48.9707
+     ],
+     "observations": 4409,
+     "slivers": 2102,
+     "mean_fill": 60.0,
+     "data_equiv": 1761.6,
+     "stored_gb": 374.0,
+     "transfer_gb": 515.0,
+     "days": [
+      0.42,
+      0.53
+     ],
+     "in_oregon_archive": false
+    },
+    {
+     "tile": "h003v002",
+     "region": "CU",
+     "aoi_share": 0.0829,
+     "tile_covered": 0.0423,
+     "bbox": [
+      -124.2186,
+      45.9816,
+      -121.7905,
+      47.6618
+     ],
+     "observations": 4656,
+     "slivers": 2168,
+     "mean_fill": 61.5,
+     "data_equiv": 1793.0,
+     "stored_gb": 380.6,
+     "transfer_gb": 524.1,
+     "days": [
+      0.44,
+      0.56
+     ],
+     "in_oregon_archive": true
+    },
+    {
+     "tile": "h002v001",
+     "region": "CU",
+     "aoi_share": 0.0442,
+     "tile_covered": 0.0226,
+     "bbox": [
+      -126.7144,
+      46.868,
+      -124.2186,
+      48.5767
+     ],
+     "observations": 3134,
+     "slivers": 1555,
+     "mean_fill": 66.0,
+     "data_equiv": 1064.9,
+     "stored_gb": 226.1,
+     "transfer_gb": 311.3,
+     "days": [
+      0.3,
+      0.38
+     ],
+     "in_oregon_archive": false
+    }
+   ]
+  },
+  {
+   "aoi_id": "glkn_slbe_landtrendr",
+   "grid_region": "CU",
+   "total": {
+    "tiles": 1,
+    "observations": 3613,
+    "slivers": 211,
+    "stored_tb": 0.38,
+    "transfer_tb": 0.52,
+    "days": [
+     0.3,
+     0.4
+    ]
+   },
+   "new_vs_oregon_archive": {
+    "tiles": 1,
+    "observations": 3613,
+    "slivers": 211,
+    "stored_tb": 0.38,
+    "transfer_tb": 0.52,
+    "days": [
+     0.3,
+     0.4
+    ]
+   },
+   "tiles": [
+    {
+     "tile": "h022v005",
+     "region": "CU",
+     "aoi_share": 1.0,
+     "tile_covered": 0.1059,
+     "bbox": [
+      -86.7411,
+      44.2567,
+      -84.6411,
+      45.7425
+     ],
+     "observations": 3613,
+     "slivers": 211,
+     "mean_fill": 50.8,
+     "data_equiv": 1776.0,
+     "stored_gb": 377.0,
+     "transfer_gb": 519.2,
+     "days": [
+      0.34,
+      0.44
+     ],
+     "in_oregon_archive": false
+    }
+   ]
+  },
+  {
+   "aoi_id": "usfs_r6_columbia_mtns_wa",
+   "grid_region": "CU",
+   "total": {
+    "tiles": 4,
+    "observations": 16938,
+    "slivers": 5272,
+    "stored_tb": 1.57,
+    "transfer_tb": 2.17,
+    "days": [
+     1.6,
+     2.0
+    ]
+   },
+   "new_vs_oregon_archive": {
+    "tiles": 4,
+    "observations": 16938,
+    "slivers": 5272,
+    "stored_tb": 1.57,
+    "transfer_tb": 2.17,
+    "days": [
+     1.6,
+     2.0
+    ]
+   },
+   "tiles": [
+    {
+     "tile": "h006v002",
+     "region": "CU",
+     "aoi_share": 0.377,
+     "tile_covered": 0.3589,
+     "bbox": [
+      -118.4651,
+      47.0308,
+      -116.0846,
+      48.6581
+     ],
+     "observations": 3776,
+     "slivers": 429,
+     "mean_fill": 49.4,
+     "data_equiv": 1910.8,
+     "stored_gb": 405.6,
+     "transfer_gb": 558.6,
+     "days": [
+      0.36,
+      0.45
+     ],
+     "in_oregon_archive": false
+    },
+    {
+     "tile": "h006v001",
+     "region": "CU",
+     "aoi_share": 0.32,
+     "tile_covered": 0.3047,
+     "bbox": [
+      -118.9443,
+      48.3526,
+      -116.507,
+      49.9934
+     ],
+     "observations": 4284,
+     "slivers": 1948,
+     "mean_fill": 61.7,
+     "data_equiv": 1639.7,
+     "stored_gb": 348.1,
+     "transfer_gb": 479.3,
+     "days": [
+      0.41,
+      0.52
+     ],
+     "in_oregon_archive": false
+    },
+    {
+     "tile": "h005v001",
+     "region": "CU",
+     "aoi_share": 0.2152,
+     "tile_covered": 0.2049,
+     "bbox": [
+      -120.9208,
+      48.0203,
+      -118.4651,
+      49.6796
+     ],
+     "observations": 3809,
+     "slivers": 286,
+     "mean_fill": 48.6,
+     "data_equiv": 1956.1,
+     "stored_gb": 415.2,
+     "transfer_gb": 571.8,
+     "days": [
+      0.36,
+      0.46
+     ],
+     "in_oregon_archive": false
+    },
+    {
+     "tile": "h005v002",
+     "region": "CU",
+     "aoi_share": 0.0878,
+     "tile_covered": 0.0836,
+     "bbox": [
+      -120.4039,
+      46.7067,
+      -118.0051,
+      48.3526
+     ],
+     "observations": 5069,
+     "slivers": 2609,
+     "mean_fill": 62.4,
+     "data_equiv": 1905.1,
+     "stored_gb": 404.4,
+     "transfer_gb": 556.9,
+     "days": [
+      0.48,
+      0.61
+     ],
+     "in_oregon_archive": false
+    }
+   ]
+  },
+  {
+   "aoi_id": "usfs_r10_northern_se_alaska",
+   "grid_region": "AK",
+   "total": {
+    "tiles": 6,
+    "observations": 17646,
+    "slivers": 4542,
+    "stored_tb": 1.74,
+    "transfer_tb": 2.4,
+    "days": [
+     1.7,
+     2.1
+    ]
+   },
+   "new_vs_oregon_archive": {
+    "tiles": 6,
+    "observations": 17646,
+    "slivers": 4542,
+    "stored_tb": 1.74,
+    "transfer_tb": 2.4,
+    "days": [
+     1.7,
+     2.1
+    ]
+   },
+   "tiles": [
+    {
+     "tile": "h021v008",
+     "region": "AK",
+     "aoi_share": 0.449,
+     "tile_covered": 0.5664,
+     "bbox": [
+      -137.2499,
+      58.6729,
+      -133.9665,
+      60.3297
+     ],
+     "observations": 3139,
+     "slivers": 808,
+     "mean_fill": 51.1,
+     "data_equiv": 1534.7,
+     "stored_gb": 325.8,
+     "transfer_gb": 448.6,
+     "days": [
+      0.3,
+      0.38
+     ],
+     "in_oregon_archive": false
+    },
+    {
+     "tile": "h021v009",
+     "region": "AK",
+     "aoi_share": 0.2757,
+     "tile_covered": 0.3479,
+     "bbox": [
+      -137.88,
+      57.3842,
+      -134.7373,
+      59.0324
+     ],
+     "observations": 2807,
+     "slivers": 796,
+     "mean_fill": 53.4,
+     "data_equiv": 1308.9,
+     "stored_gb": 277.9,
+     "transfer_gb": 382.6,
+     "days": [
+      0.27,
+      0.34
+     ],
+     "in_oregon_archive": false
+    },
+    {
+     "tile": "h022v008",
+     "region": "AK",
+     "aoi_share": 0.1414,
+     "tile_covered": 0.1785,
+     "bbox": [
+      -134.7373,
+      58.2652,
+      -131.4253,
+      59.9563
+     ],
+     "observations": 3237,
+     "slivers": 935,
+     "mean_fill": 58.0,
+     "data_equiv": 1359.4,
+     "stored_gb": 288.6,
+     "transfer_gb": 397.4,
+     "days": [
+      0.31,
+      0.39
+     ],
+     "in_oregon_archive": false
+    },
+    {
+     "tile": "h022v009",
+     "region": "AK",
+     "aoi_share": 0.1066,
+     "tile_covered": 0.1345,
+     "bbox": [
+      -135.4524,
+      56.9907,
+      -132.2801,
+      58.6729
+     ],
+     "observations": 2672,
+     "slivers": 465,
+     "mean_fill": 48.7,
+     "data_equiv": 1369.7,
+     "stored_gb": 290.8,
+     "transfer_gb": 400.4,
+     "days": [
+      0.25,
+      0.32
+     ],
+     "in_oregon_archive": false
+    },
+    {
+     "tile": "h020v008",
+     "region": "AK",
+     "aoi_share": 0.0172,
+     "tile_covered": 0.0217,
+     "bbox": [
+      -139.8125,
+      59.0324,
+      -136.5697,
+      60.6517
+     ],
+     "observations": 3181,
+     "slivers": 530,
+     "mean_fill": 49.9,
+     "data_equiv": 1592.6,
+     "stored_gb": 338.1,
+     "transfer_gb": 465.6,
+     "days": [
+      0.3,
+      0.38
+     ],
+     "in_oregon_archive": false
+    },
+    {
+     "tile": "h020v009",
+     "region": "AK",
+     "aoi_share": 0.0101,
+     "tile_covered": 0.0127,
+     "bbox": [
+      -140.3523,
+      57.7309,
+      -137.2499,
+      59.3422
+     ],
+     "observations": 2610,
+     "slivers": 1008,
+     "mean_fill": 59.9,
+     "data_equiv": 1047.7,
+     "stored_gb": 222.4,
+     "transfer_gb": 306.3,
+     "days": [
+      0.25,
+      0.31
+     ],
+     "in_oregon_archive": false
+    }
+   ]
+  }
+ ]
+}

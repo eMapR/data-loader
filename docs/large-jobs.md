@@ -13,7 +13,7 @@ version: 1
 provider: usgs_ard
 sensors: [landsat]
 aoi:
-  tiles: [h003v004, h003v005]          # CONUS ARD grid ids
+  tiles: [h003v004, h003v005]          # CONUS ARD grid ids; Alaska/Hawaii: AK_h021v008, HI_h001v001
 time:
   start_year: 1990                     # no end_year = open-ended (through today)
 temporal_mode: scene

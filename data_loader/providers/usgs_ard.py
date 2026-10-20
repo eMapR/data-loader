@@ -69,9 +69,11 @@ Other live-verified facts:
   per-sensor suffix map (see BAND_FILE_SUFFIX_BY_SENSOR).
 - QA_PIXEL is the standard Collection 2 bitmask, so
   `masking.landsat_qa_mask` applies unchanged.
-- Grid: fixed national Albers Equal-Area Conic ARD grid, 5000x5000px at
-  30m, addressed by `landsat:grid_horizontal`/`landsat:grid_vertical` and
-  region (`CU` CONUS / `AK` / `HI`). `proj:epsg` is null (custom WKT2, no
+- Grid: one fixed Albers Equal-Area Conic ARD grid per region (`CU`
+  CONUS / `AK` Alaska / `HI` Hawaii, each with its own projection and
+  origin), 5000x5000px at 30m, addressed by `landsat:grid_region` +
+  `landsat:grid_horizontal`/`landsat:grid_vertical`; the same h/v is a
+  different place in each region (data_loader.tiles). `proj:epsg` is null (custom WKT2, no
   EPSG code); reads reproject from the source CRS via WarpedVRT, so the
   missing EPSG code costs nothing at read time.
 - One ARD tile can mosaic several WRS-2 scenes from the same overpass
@@ -99,7 +101,7 @@ from data_loader.product_contract import (
     parse_version_policy,
 )
 from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef, SystemicError, redact_urls
-from data_loader.tiles import UsgsArdConusGrid, item_tile_id
+from data_loader.tiles import UsgsArdGrid, item_tile_id
 
 STAC_URL = "https://landsatlook.usgs.gov/stac-server"
 COLLECTION = "landsat-c2ard-sr"
@@ -260,7 +262,7 @@ def _cloud_query(max_cloud_percent) -> Optional[dict]:
 
 class UsgsArdProvider:
     name = "usgs_ard"
-    tile_grid = UsgsArdConusGrid()
+    tile_grid = UsgsArdGrid()
 
     def __init__(self, username: Optional[str] = None, token: Optional[str] = None, retries: int = 4):
         import os
@@ -398,8 +400,10 @@ class UsgsArdProvider:
 
     def search_tile(self, tile_id: str, sensor: str, start, end, max_cloud_percent=None,
                     processing_version_policy="any") -> list[SceneRef]:
-        """Every ARD item of one CONUS tile in [start, end]. Searches the
-        WHOLE tile extent and keeps only items on this tile's grid h/v: an
+        """Every ARD item of one tile in [start, end], on the tile's own
+        regional grid (CONUS, Alaska or Hawaii: the same h/v names a
+        different place in each). Searches the WHOLE tile extent and keeps
+        only items on this tile's region + h/v: an
         ARD item's STAC geometry is its data footprint, so a small AOI
         misses "sliver" observations from neighboring WRS-2 paths that only
         clip the tile edge (h003v004: a 0.1 deg center AOI found 2,411 of
@@ -409,9 +413,10 @@ class UsgsArdProvider:
         if parse_version_policy(processing_version_policy)[0] == "pinned":
             raise ValueError("[usgs_ard] processing_version_policy='pinned:...' is not supported -- "
                              "ARD tiles have no reprocessing-baseline concept.")
-        h, v = self.tile_grid.parse(tile_id)
+        region, h, v = self.tile_grid.parse(tile_id)
+        tile_id = self.tile_grid.canonical(tile_id)
         query = {"landsat:grid_horizontal": {"eq": f"{h:02d}"}, "landsat:grid_vertical": {"eq": f"{v:02d}"},
-                 "landsat:grid_region": {"eq": "CU"}}
+                 "landsat:grid_region": {"eq": region}}
         query.update(_cloud_query(max_cloud_percent) or {})
         cat = self._open_client()
         items = None

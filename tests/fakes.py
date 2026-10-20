@@ -13,7 +13,7 @@ import numpy as np
 from data_loader.config import config_from_dict
 from data_loader.product_contract import SCENE, USGS_C2_L2, AcquisitionProvenance, ProductIdentity
 from data_loader.providers.base import NativeEncoding, NativeRead, SceneRef
-from data_loader.tiles import UsgsArdConusGrid
+from data_loader.tiles import UsgsArdGrid
 
 AOI = {"upper_left": [-122.43, 44.29], "lower_right": [-122.40, 44.27]}
 
@@ -80,7 +80,7 @@ class FakeProvider:
             self.read_scene_native = self._read_scene_native
             self.native_encoding = self._native_encoding
         if tiles:
-            self.tile_grid = UsgsArdConusGrid()
+            self.tile_grid = UsgsArdGrid()
             self.search_tile = self._search_tile
 
     def capabilities(self):

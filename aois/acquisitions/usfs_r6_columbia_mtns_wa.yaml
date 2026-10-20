@@ -1,0 +1,41 @@
+# USFS R6, EPA L3 ecoregion 15 (Columbia Mountains/Northern Rockies), WA portion (21,422 km2).
+# Complete native USGS ARD tiles, every Landsat observation 1990-present, as
+# USGS distributes them: uint16 DN + QA_PIXEL, no cloud filter, no pixel
+# masking, no resampling -- the same product spec as the Oregon archive.
+# Tiles: every ARD tile intersecting aois/usfs_r6_columbia_mtns_wa.geojson (bench/study_area_ard_plan.py),
+# ordered by share of the AOI, edge tiles included.
+# Plan (2026-10-20): 16,938 observations, ~1.57 TB stored, ~2.17 TB downloaded,
+# ~1.6-2.0 days on one M2M account (aois/ard_tile_plan.json).
+# Set the location with --output-dir, e.g.:
+#   data-loader plan aois/acquisitions/usfs_r6_columbia_mtns_wa.yaml --output-dir /vol/v1/data/usfs_r6_columbia_mtns_wa_landsat_ard
+#   data-loader run  aois/acquisitions/usfs_r6_columbia_mtns_wa.yaml --output-dir /vol/v1/data/usfs_r6_columbia_mtns_wa_landsat_ard
+version: 1
+provider: usgs_ard
+sensors:
+  - name: landsat
+    product_family: usgs_ard_sr        # fail rather than accept a different product
+
+aoi:
+  tiles:
+    - h006v002                #  37.7% of AOI, 3,776 obs
+    - h006v001                #  32.0% of AOI, 4,284 obs
+    - h005v001                #  21.5% of AOI, 3,809 obs
+    - h005v002                #   8.8% of AOI, 5,069 obs
+
+time:
+  start_year: 1990                     # no end_year: through today
+
+temporal_mode: scene
+
+filters:
+  max_cloud_percent: 100
+  pixel_cloud_mask: false
+
+output:
+  dir: data/usfs_r6_columbia_mtns_wa_landsat_ard
+  encoding: native
+  bands: [blue, green, red, nir, swir1, swir2]
+  qa_band: true
+
+workers: 4
+max_attempts: 3

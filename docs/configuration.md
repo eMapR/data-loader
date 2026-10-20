@@ -25,7 +25,7 @@ sensors:                         # required: one or more of landsat, sentinel2
 aoi:                             # required: a bbox OR tiles
   upper_left: [-122.43, 44.29]   #   [lon, lat], EPSG:4326
   lower_right: [-122.34, 44.23]
-  # tiles: [h003v004, h003v005]  #   provider tile ids (usgs_ard: CONUS ARD grid)
+  # tiles: [h003v004, AK_h021v008]  # provider tile ids (usgs_ard: CONUS, AK_ Alaska, HI_ Hawaii ARD grids)
 
 time:                            # required: years OR dates
   start_year: 1990
@@ -110,15 +110,35 @@ onto one grid (`grid.crs`, default a UTM zone picked from the AOI center)
 and labeled `aoi` in the output.
 
 **Tiles:** `tiles: [h003v004, ...]` requests whole tiles of the provider's
-own tile grid. Only `usgs_ard` has one: the CONUS ARD grid, with tiles of
-5000×5000 px at 30 m in Albers Equal-Area, `h` 0–32 west to east and `v`
-0–21 north to south. A tile request:
+own tile grid. Only `usgs_ard` has one. USGS ARD has a separate native
+grid for each region, all with tiles of 5000×5000 px at 30 m in Albers
+Equal-Area, `h` west to east and `v` north to south:
+
+| Region | Tile id | `h` | `v` | Projection |
+|---|---|---|---|---|
+| CONUS | `h003v004` or `CU_h003v004` | 0–32 | 0–21 | Albers, lat_0 23, lon_0 −96, parallels 29.5/45.5 |
+| Alaska | `AK_h021v008` | 0–25 | 0–13 | Albers, lat_0 50, lon_0 −154, parallels 55/65 |
+| Hawaii | `HI_h001v001` | 0–4 | 0–2 | Albers, lat_0 3, lon_0 −157, parallels 8/18 |
+
+Every region numbers its tiles from `h000v000`, so the same `h`/`v` is a
+different place in each: CONUS `h021v008` is in northern Illinois, Alaska
+`AK_h021v008` is around Juneau and Haines. **Alaska and Hawaii tiles must
+carry their region prefix.** A bare id always means CONUS (that's the form
+existing CONUS datasets use, and the form CONUS tiles are recorded in;
+`CU_h003v004` is accepted and recorded as `h003v004`). Unknown regions,
+out-of-range `h`/`v`, other spellings (`AK:h021v008`, `ak_h021v008`) and
+the same tile listed twice are rejected before anything is searched.
+`data-loader validate` prints each tile's grid and lon/lat extent, so a
+tile on the wrong grid is easy to spot. One request can mix regions.
+
+A tile request:
 
 - reads every observation of the tile, including "slivers" from
   neighboring satellite paths that only clip the tile's edge;
 - stays on the tile's native pixel grid, with no reprojection or
   resampling (`grid.crs` is `native`);
-- writes each tile under its own ID: `landsat/h003v004/...`.
+- writes each tile under its own ID: `landsat/h003v004/...`,
+  `landsat/AK_h021v008/...`.
 
 USGS's [ARD tile grid page](https://www.usgs.gov/landsat-missions/landsat-us-analysis-ready-data)
 has maps of the grid. Oregon's 23 tiles are listed in

@@ -469,6 +469,34 @@ Measured facts worth keeping:
   GDAL scale/offset/nodata matched the upgraded metadata; `plan` with the
   pinned example matched every acquired key.
 
+### Native Alaska/Hawaii ARD grids; CONUS/Alaska tile-id collision (2026-10-20)
+
+USGS ARD has one native grid per region, each with its own Albers
+projection and origin, read from LandsatLook STAC `proj:transform`/
+`proj:wkt2` and the published h/v ranges:
+
+| Region | Projection | Origin of h000v000 | h | v |
+|---|---|---|---|---|
+| CU | lat_0 23, lon_0 −96, parallels 29.5/45.5 | (−2565585, 3314805) | 0–32 | 0–21 |
+| AK | lat_0 50, lon_0 −154, parallels 55/65 | (−2201715, 2474325) | 0–25 | 0–13 |
+| HI | lat_0 3, lon_0 −157, parallels 8/18 | (−444345, 2168895) | 0–4 | 0–2 |
+
+Every region numbers from h000v000, so ids collide: CONUS `h021v008` is
+northern Illinois (−88.1, 41.1), Alaska h021v008 is Juneau/Haines. 1.1
+hard-coded `landsat:grid_region: CU` in `search_tile`, so an Alaska tile id
+validated and silently fetched the CONUS tile. Fixed generically
+(`tiles.ARD_REGIONS`, one `UsgsArdGrid`, no Alaska code path):
+region-qualified ids (`AK_h021v008`, `HI_…`, `CU_…`; bare = CONUS, recorded
+bare so existing datasets are unchanged), region in the STAC query, item
+matching on region + h/v, and `grid_from_item` refuses another region's
+item. Aleutian tiles across ±180° get a full-longitude search bbox.
+
+First use: four study areas (`aois/`), 13 new tiles (6 on the Alaska
+grid, 7 CONUS), 45,740 observations; DataLoader
+discovery matched an independent STAC count exactly. QA_PIXEL-based
+valid-data coverage of HUC 190103 (`bench/ard_valid_coverage.py`) is not
+measured yet: the first attempt ran with rejected M2M credentials.
+
 ## Scaling limitations identified
 
 **Fundamental / external (not something DataLoader controls):**

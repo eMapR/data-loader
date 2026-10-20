@@ -48,6 +48,32 @@ class CliTests(unittest.TestCase):
         self.assertIn("OK", out)
         self.assertIn("1 window(s) 2023-07-01..2023-07-31", out)
 
+    def test_validate_lists_each_tiles_grid_and_location(self):
+        self.cfg.write_text(f"""version: 1
+provider: usgs_ard
+sensors: [landsat]
+aoi: {{tiles: [CU_h021v008, AK_h021v008]}}
+time: {{start_year: 2023, end_year: 2023}}
+temporal_mode: scene
+output: {{dir: "{self.dir / 'ard'}", encoding: native, bands: [red], qa_band: true}}
+""")
+        code, out, _ = _cli("validate", str(self.cfg))
+        self.assertEqual(code, 0, out)
+        lines = {line.split()[0]: line for line in out.splitlines() if line.startswith("    ")}
+        self.assertIn("usgs_ard_conus", lines["h021v008"])
+        self.assertIn("usgs_ard_alaska", lines["AK_h021v008"])
+        self.assertIn("lon  -137.25", lines["AK_h021v008"])
+
+    def test_validate_bad_tile_region_exit_2(self):
+        self.cfg.write_text(CONFIG.format(out=self.dir / "out")
+                            .replace("provider: planetary_computer", "provider: usgs_ard")
+                            .replace("aoi: {upper_left: [-122.43, 44.29], lower_right: [-122.40, 44.27]}",
+                                     "aoi: {tiles: [AK:h021v008]}")
+                            .replace("grid: {resolution_m: 300}\n", ""))
+        code, _, err = _cli("validate", str(self.cfg))
+        self.assertEqual(code, 2)
+        self.assertIn("AK_h021v008", err)
+
     def test_validate_bad_config_exit_2(self):
         self.cfg.write_text(CONFIG.format(out="x").replace("temporal_mode", "temporal_mod"))
         code, _, err = _cli("validate", str(self.cfg))

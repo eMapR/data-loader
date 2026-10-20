@@ -1,0 +1,41 @@
+# Study-area AOIs for DataLoader acquisitions (boundaries confirmed 2026-10-20).
+# Hand-maintained spec. `python bench/prepare_aois.py aois/aois.yaml` reads
+# each source (never modifies it), selects the feature(s), repairs geometry
+# if needed, dissolves to one (Multi)Polygon and writes aois/<id>.geojson
+# (EPSG:4326) plus aois/registry.json (source checksums, CRS, area, checks).
+source_root: /Users/clarype/Documents/prithvi/prithvi-reference-assessment/data/raw/boundaries
+
+aois:
+  - id: nccn_olym_lpa01
+    name: "NCCN Olympic National Park, LPa01 10-mile-buffer study area"
+    program: NCCN
+    source: nps/Prithvi_NCCN/LPa01_LEWI_MORA_NOCA_OLYM.shp
+    where: {PARK_CODE: OLYM}
+    expect: {features: 1, area_km2: 11476}
+    note: >-
+      Original (1985-2010) NCCN Landscape Dynamics study area. Chosen over the
+      4,039 km2 Protected Areas AOI for more coverage; contains it entirely.
+
+  - id: glkn_slbe_landtrendr
+    name: "GLKN Sleeping Bear Dunes National Lakeshore, LandTrendr analysis area"
+    program: GLKN
+    source: glkn/GLKN_LandTrendr_AOIs.shp
+    where: {park: slbe}
+    expect: {features: 1, area_km2: 2383}
+    note: "GLKN's own LandTrendr AOI (embedded lineage); contains 99.5% of the NPS SLBE unit."
+
+  - id: usfs_r6_columbia_mtns_wa
+    name: "USFS Region 6, EPA Level III ecoregion 15 (Columbia Mountains/Northern Rockies), Washington portion"
+    program: USFS R6 ADS
+    source: ads_r6/BugNet_R6_Regions.shp
+    where: {us_l3code: "15", STATE: WA}
+    expect: {features: 1, area_km2: 21422}
+    note: "WA portion only (as clipped in the BugNet R6 set); no Idaho or Montana."
+
+  - id: usfs_r10_northern_se_alaska
+    name: "USFS Region 10, HUC6 190103 Northern Southeast Alaska"
+    program: USFS R10 ADS
+    source: ads_r10/AK_HUC6_boundaries/AK_HUC6_Northern_Southeast_Alaska.shp
+    where: {huc6: "190103"}
+    expect: {features: 1, area_km2: 28388}
+    note: "WBD HUC6; states=AK,CN, i.e. the basin extends into British Columbia/Yukon."

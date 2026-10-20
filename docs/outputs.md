@@ -78,6 +78,7 @@ and offset, missing acquisitions, reading while a run is in progress), see
       "h003v004": {"kind": "tile", "tile": {"system": "usgs_ard_conus", "id": "h003v004", "h": 3, "v": 4, ...},
                    "crsWkt": "...", "epsg": null, "resolutionM": 30.0,
                    "transform": [30, 0, -2115585, 0, -30, 2714805], "width": 5000, "height": 5000}
+      // Alaska/Hawaii tiles: "AK_h021v008": {"kind": "tile", "tile": {"system": "usgs_ard_alaska", "id": "AK_h021v008", "region": "AK", ...}, ...}
       // bbox requests: "aoi": {"kind": "aoi", "crs": "EPSG:32610", "aoi": {"upperLeft": [...], "lowerRight": [...]}, ...}
     }
   },

@@ -14,7 +14,7 @@ manifest, and refuses to substitute one for another when
 
 | Provider | Sensor → product family | Years | Account / cost | Native encoding + QA band | Tiles |
 |---|---|---|---|---|---|
-| `usgs_ard` | Landsat 4, 5, 7, 8, 9 → `usgs_ard_sr` (C2 U.S. ARD surface reflectance) | 1982–present | Free; USGS EROS account + M2M token | yes | yes (CONUS ARD grid) |
+| `usgs_ard` | Landsat 4, 5, 7, 8, 9 → `usgs_ard_sr` (C2 U.S. ARD surface reflectance) | 1982–present | Free; USGS EROS account + M2M token | yes | yes (CONUS, Alaska and Hawaii ARD grids) |
 | `planetary_computer` | Landsat 5, 7, 8, 9 → `usgs_c2_l2`; Sentinel-2 → `esa_s2_l2a` | Landsat 1984–, S2 2015– | Free, anonymous | yes | no |
 | `aws_earth_search` | Sentinel-2 → `esa_s2_l2a`; Landsat → `usgs_c2_l2` | as above | S2 free, anonymous. Landsat is **Requester Pays**: needs AWS credentials and bills that account | yes | no |
 | `gee` | Landsat → `usgs_c2_l2`; Sentinel-2 → `esa_s2_l2a_harmonized` | | Earth Engine project | no (float32 only) | no |

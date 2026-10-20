@@ -33,7 +33,7 @@ import threading
 import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from typing import Callable, Optional
@@ -198,13 +198,29 @@ def check_request(config: Config, provider=None) -> list[str]:
         if tile_grid is None or not callable(getattr(provider, "search_tile", None)):
             raise ConfigError(f"aoi.tiles: provider {provider.name!r} has no tile grid; use a bbox "
                               "(tiles are supported by usgs_ard)")
+        canonical = []
         for t in config.aoi.tiles:
             try:
-                tile_grid.validate(t)
+                canonical.append(tile_grid.canonical(t))
             except ValueError as e:
                 raise ConfigError(f"aoi.tiles: {e}") from None
+        repeated = sorted({c for c in canonical if canonical.count(c) > 1})
+        if repeated:
+            raise ConfigError(f"aoi.tiles: the same tile is listed more than once ({', '.join(repeated)}; "
+                              "a bare id and its CU_ form are the same CONUS tile)")
     check = getattr(provider, "credential_problems", None)
     return list(check([s.name for s in config.sensors])) if callable(check) else []
+
+
+def canonical_tiles(config: Config, provider) -> Config:
+    """`config` with aoi.tiles in the provider's canonical spelling (USGS
+    ARD: bare for CONUS, region-qualified otherwise), so the recorded
+    request, keys and paths don't depend on how a tile was written.
+    Expects a config check_request has accepted."""
+    if not config.aoi.tiles:
+        return config
+    tiles = tuple(provider.tile_grid.canonical(t) for t in config.aoi.tiles)
+    return config if tiles == config.aoi.tiles else replace(config, aoi=replace(config.aoi, tiles=tiles))
 
 
 def recorded_request(config: Config, provider) -> dict:
@@ -255,6 +271,7 @@ def discover(config: Config, provider=None, *, today: Optional[date] = None,
     """Search the provider for everything the request covers. Returns the
     plan (units to produce, scenes filtered out) and grid descriptions."""
     provider = provider or make_provider(config)
+    config = canonical_tiles(config, provider)
     today = today or date.today()
     windows = config.time.windows(today)
     if not windows:
@@ -653,6 +670,7 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
     problems = check_request(config, provider)
     if problems:
         raise ConfigError("cannot read from this provider yet:\n  " + "\n  ".join(problems))
+    config = canonical_tiles(config, provider)
     root = Path(config.output.dir)
     writer = DatasetWriter(root, recorded_request(config, provider))
     try:
@@ -847,6 +865,7 @@ def plan_summary(config: Config, *, today: Optional[date] = None, log: Callable[
     output directory already has. Reads nothing but metadata."""
     provider = make_provider(config)
     warnings_ = check_request(config, provider)
+    config = canonical_tiles(config, provider)
     plan, _ = discover(config, provider, today=today, log=log)
     acquired_keys = set()
     root = Path(config.output.dir)

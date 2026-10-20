@@ -1,0 +1,44 @@
+# USFS R10, HUC6 190103 Northern Southeast Alaska (28,388 km2).
+# Complete native USGS ARD tiles, every Landsat observation 1990-present, as
+# USGS distributes them: uint16 DN + QA_PIXEL, no cloud filter, no pixel
+# masking, no resampling -- the same product spec as the Oregon archive.
+# Tiles: every ARD tile intersecting aois/usfs_r10_northern_se_alaska.geojson (bench/study_area_ard_plan.py),
+# ordered by share of the AOI, edge tiles included.
+# Plan (2026-10-20): 17,646 observations, ~1.74 TB stored, ~2.4 TB downloaded,
+# ~1.7-2.1 days on one M2M account (aois/ard_tile_plan.json).
+# Alaska ARD grid: tile ids carry the AK_ prefix (docs/configuration.md#aoi-bbox-or-tiles).
+# Set the location with --output-dir, e.g.:
+#   data-loader plan aois/acquisitions/usfs_r10_northern_se_alaska.yaml --output-dir /vol/v1/data/usfs_r10_northern_se_alaska_landsat_ard
+#   data-loader run  aois/acquisitions/usfs_r10_northern_se_alaska.yaml --output-dir /vol/v1/data/usfs_r10_northern_se_alaska_landsat_ard
+version: 1
+provider: usgs_ard
+sensors:
+  - name: landsat
+    product_family: usgs_ard_sr        # fail rather than accept a different product
+
+aoi:
+  tiles:
+    - AK_h021v008             #  44.9% of AOI, 3,139 obs
+    - AK_h021v009             #  27.6% of AOI, 2,807 obs
+    - AK_h022v008             #  14.1% of AOI, 3,237 obs
+    - AK_h022v009             #  10.7% of AOI, 2,672 obs
+    - AK_h020v008             #   1.7% of AOI, 3,181 obs
+    - AK_h020v009             #   1.0% of AOI, 2,610 obs
+
+time:
+  start_year: 1990                     # no end_year: through today
+
+temporal_mode: scene
+
+filters:
+  max_cloud_percent: 100
+  pixel_cloud_mask: false
+
+output:
+  dir: data/usfs_r10_northern_se_alaska_landsat_ard
+  encoding: native
+  bands: [blue, green, red, nir, swir1, swir2]
+  qa_band: true
+
+workers: 4
+max_attempts: 3

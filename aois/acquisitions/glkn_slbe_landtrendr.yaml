@@ -1,0 +1,38 @@
+# GLKN Sleeping Bear Dunes, LandTrendr analysis area (2,383 km2).
+# Complete native USGS ARD tiles, every Landsat observation 1990-present, as
+# USGS distributes them: uint16 DN + QA_PIXEL, no cloud filter, no pixel
+# masking, no resampling -- the same product spec as the Oregon archive.
+# Tiles: every ARD tile intersecting aois/glkn_slbe_landtrendr.geojson (bench/study_area_ard_plan.py),
+# ordered by share of the AOI, edge tiles included.
+# Plan (2026-10-20): 3,613 observations, ~0.38 TB stored, ~0.52 TB downloaded,
+# ~0.3-0.4 days on one M2M account (aois/ard_tile_plan.json).
+# Set the location with --output-dir, e.g.:
+#   data-loader plan aois/acquisitions/glkn_slbe_landtrendr.yaml --output-dir /vol/v1/data/glkn_slbe_landtrendr_landsat_ard
+#   data-loader run  aois/acquisitions/glkn_slbe_landtrendr.yaml --output-dir /vol/v1/data/glkn_slbe_landtrendr_landsat_ard
+version: 1
+provider: usgs_ard
+sensors:
+  - name: landsat
+    product_family: usgs_ard_sr        # fail rather than accept a different product
+
+aoi:
+  tiles:
+    - h022v005                # 100.0% of AOI, 3,613 obs
+
+time:
+  start_year: 1990                     # no end_year: through today
+
+temporal_mode: scene
+
+filters:
+  max_cloud_percent: 100
+  pixel_cloud_mask: false
+
+output:
+  dir: data/glkn_slbe_landtrendr_landsat_ard
+  encoding: native
+  bands: [blue, green, red, nir, swir1, swir2]
+  qa_band: true
+
+workers: 4
+max_attempts: 3
