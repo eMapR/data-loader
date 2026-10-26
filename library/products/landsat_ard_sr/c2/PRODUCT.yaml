@@ -1,0 +1,34 @@
+# USGS Landsat Collection 2 ARD surface reflectance, stored as USGS
+# distributes it. Every tile dataset of this product is created/updated by
+# DataLoader with exactly this request (aoi = the one tile, output.dir set by
+# the library), so all tiles are interchangeable. Changing anything here that
+# DataLoader treats as part of a dataset's identity makes a new product
+# version, never an edit of this one.
+product: landsat_ard_sr
+version: c2
+title: USGS Landsat Collection 2 ARD surface reflectance (native uint16 DN + QA_PIXEL)
+description: >-
+  Every Landsat 4-9 observation USGS publishes on the ARD tile grids from 1990
+  to the latest discovery date; no scene cloud filter, no pixel masking, no
+  resampling. Six SR bands as uint16 DN (scale 2.75e-05, offset -0.2) plus
+  QA_PIXEL, one GeoTIFF per observation. Source files are SHA-512 checked
+  against the USGS STAC record before they are written.
+grid_systems: [usgs_ard_conus, usgs_ard_alaska, usgs_ard_hawaii]
+acquisition:
+  version: 1
+  provider: usgs_ard
+  sensors:
+    - name: landsat
+      product_family: usgs_ard_sr
+  time:
+    start_year: 1990                 # open-ended: re-running a tile adds newly published observations
+  temporal_mode: scene
+  filters:
+    max_cloud_percent: 100
+    pixel_cloud_mask: false
+  output:
+    encoding: native
+    bands: [blue, green, red, nir, swir1, swir2]
+    qa_band: true
+  workers: 4
+  max_attempts: 3

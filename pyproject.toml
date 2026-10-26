@@ -22,12 +22,14 @@ dependencies = [
 [project.optional-dependencies]
 gee = ["earthengine-api"]
 dev = ["pytest"]
+library = ["geopandas>=0.14", "pyarrow", "shapely>=2"]
 
 [project.scripts]
 data-loader = "data_loader.cli:main"
+imagery-library = "imagery_library.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["data_loader*"]
+include = ["data_loader*", "imagery_library*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "data_loader._version.__version__" }

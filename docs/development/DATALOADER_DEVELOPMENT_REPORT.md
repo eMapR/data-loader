@@ -497,6 +497,44 @@ discovery matched an independent STAC count exactly. QA_PIXEL-based
 valid-data coverage of HUC 190103 (`bench/ard_valid_coverage.py`) is not
 measured yet: the first attempt ran with rejected M2M credentials.
 
+### Shared imagery library: proof of concept (2026-10-26)
+
+Imagery was stored per project (`oregon_…`, `nccn_…`, `usfs_…`), although
+an ARD tile is the same data whichever project paid for it; Olympic's
+complete coverage already depended on a tile inside the Oregon archive.
+`imagery_library/` (docs/library.md) stores it by product / version /
+grid / tile instead: one ordinary DataLoader dataset per tile, a product
+spec (`library/products/…/PRODUCT.yaml`) every tile must match by spec
+hash, and a generated GeoParquet catalog for AOI + date-range queries. One
+dataset-level archive was rejected: DataLoader locks, verifies and
+rewrites items.jsonl per directory and records one request per manifest,
+so it would need a schema 2.0 to do what per-tile datasets do now.
+
+Validated without touching production:
+
+- **Production metadata, read-only:** a dry run over all five archives
+  (36 tiles) found every tile matching the product spec and all 269,532
+  listed files present at their recorded size; a metadata-only import
+  (35 s, 285 MB) and catalog build (12 s) gave 36 tiles, 134,766
+  observations, 12.46 TB, equal to the source manifests. Queries took
+  1.5-2 s: the Olympic AOI resolves to h003v001 + h003v002 (from the Oregon
+  archive) + h002v001 with 100% coverage; the Tanana AOI reports the same
+  12 Alaska tiles as `aois/` planning, as missing. Source manifest and items
+  hashes were unchanged after every step.
+- **End to end on a fresh test archive** (h022v005 + AK_h020v008,
+  June-July 2024, 50 observations, 7.2 GB, downloaded for the test):
+  import refused against the production product (time range differs);
+  hard-link import into a matching test product (same inodes, link count
+  2); sha256 verify OK per tile; `data-loader plan` on the generated
+  per-tile configs showed 0 to do; extending h022v005 to August downloaded
+  exactly the 12 new observations and nothing else; a catalog build and a
+  query during that run worked (tile flagged `run_in_progress`); the source
+  archive stayed byte-identical with all 50 files. Files read back in their
+  native CRS (Alaska Albers for the AK tile).
+
+Storage findings and the questions for the storage administrators are in
+docs/library-storage-requirements.md. Production is not migrated.
+
 ## Scaling limitations identified
 
 **Fundamental / external (not something DataLoader controls):**
