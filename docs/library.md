@@ -47,7 +47,7 @@ engine internals. Projects hold no imagery and no acquisition settings.
     acquisitions.jsonl                          every `imagery-library acquire` run (tile, outcome, time)
     verification.jsonl                          every verify (tile, time, ok, files, checksums)
     verified/<tile path>.json                   exactly which observations the last verify covered
-    locks/<provider>.lock                       one acquisition per source account at a time
+    locks/usgs_m2m-<hash>.lock                  DataLoader's account lock (DATALOADER_LOCK_DIR points here)
     configs/, logs/                             generated per-tile DataLoader configs and their run logs
 ```
 
@@ -146,7 +146,7 @@ Every tile in a query result (and the catalog) has two states:
 | acquisition | meaning |
 |---|---|
 | `complete` | everything USGS has published (as of `discovered_through`) is acquired |
-| `incomplete` | some observations failed or are pending (`failed_example` says why) |
+| `incomplete` | some observations failed or are pending (`failed_example` says why). Older processing versions USGS has replaced are `superseded`, not failed, and do not make a tile incomplete |
 | `updating` | a DataLoader run is writing the tile right now; newest observations appear after the next catalog build |
 
 | verification | meaning |
@@ -176,6 +176,8 @@ imagery-library acquire ROOT --aoi aois/usfs_r10_tanana_river.geojson
 imagery-library acquire ROOT --tile AK_h016v005 --include-held
 
 imagery-library verify ROOT [--tile T]      # DataLoader verify per tile (skips tiles being written)
+imagery-library permissions ROOT [--fix]    # check / apply the permission policy (LIBRARY.yaml permissions:)
+imagery-library backup-list ROOT --tier metadata|irreplaceable|imagery --out LIST   # see library-backup-policy.md
 imagery-library catalog ROOT                # rebuild after runs / verifies
 ```
 
@@ -188,10 +190,17 @@ imagery-library catalog ROOT                # rebuild after runs / verifies
 - **One writer per tile.** DataLoader holds an exclusive lock on the tile
   directory for the whole run; a second run on the same tile (from any
   maintainer or machine) is refused at once.
-- **One acquisition per USGS account.** `acquire` holds
-  `admin/locks/<provider>.lock` around each run, so requests queue (or,
-  with `--no-wait`, are skipped and reported). Locks are `flock`; on NFSv4
+- **One acquisition per USGS account, enforced by DataLoader.** Every
+  `data-loader run` holds a lock for its USGS account (DataLoader 1.2; a
+  second run exits with code 6 or, with `--wait-for-account`, queues).
+  `acquire` runs DataLoader with `DATALOADER_LOCK_DIR=<library>/admin/locks`
+  and `--wait-for-account` (`--no-wait`: skip and report); maintainers put
+  the same `DATALOADER_LOCK_DIR` in the env file that holds the account's
+  credentials, so direct runs share the lock. Locks are `flock`; on NFSv4
   they are held on the server, so they work across machines.
+- **Permissions are applied, not hoped for.** Every maintainer command
+  brings what it wrote to the policy (read-only imagery, maintainers-only
+  admin); `imagery-library permissions ROOT` audits the whole library.
 - **Readers never see partial state.** DataLoader writes each GeoTIFF to a
   temp name, fsyncs, renames, and only then records it; the catalog is built
   into a new directory and `catalog/current` is switched with one atomic

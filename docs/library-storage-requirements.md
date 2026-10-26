@@ -59,40 +59,44 @@ group-writable with a default ACL (`group::rwx`), so all 13 members of
 read-only requirement; we'd like to tighten it (or move to a volume where we
 can) as part of the migration.
 
-Maintainers must run acquisitions through `imagery-library acquire`, which
-takes the library-wide account lock in `admin/locks/`; a plain
-`data-loader run` on a tile still cannot corrupt it (DataLoader locks the
-tile directory) but does not queue behind other accounts' runs.
+### How it is enforced
+
+- `imagery-library` applies this policy (LIBRARY.yaml `permissions:`) to
+  everything it writes: after each import, acquisition, verify and catalog
+  build. `imagery-library permissions ROOT` checks the whole library (anyone
+  can run it); `--fix` applies it (maintainers). Run `--fix` after any
+  direct `data-loader run`, whose files arrive with the maintainer's umask.
+- **The maintainers' group must be set** (`permissions.group`): Linux
+  silently drops the setgid bit when the person running `chmod` is not in
+  the file's group, which happens on `/vol/v1/data` (files inherit group
+  `trenders` there). The tool reports any bit it could not set.
+- Directories on `/vol/v1/data` carry a default POSIX ACL
+  (`default:group::rwx`); the mode the tool sets becomes the ACL mask, so
+  the effective permissions follow the policy, but new files arrive
+  group-writable until the next pass.
+- Changing the mode of a hard-linked file changes it for every name of the
+  file: sealing a hard-link-migrated library makes the old project-named
+  archive read-only too (intended, but part of the migration approval).
+
+### One acquisition per USGS account
+
+`data-loader run` itself holds an account lock for the whole run (exit 6,
+or `--wait-for-account` to queue). Every maintainer sets
+`DATALOADER_LOCK_DIR=<library>/admin/locks` in the env file that holds the
+account's credentials, so any run on that account, through
+`imagery-library acquire` or directly, uses the same lock, across machines
+(flock on NFSv4 is held by the server).
 
 ## Backup and recovery
 
-### What to back up
-
-| Tier | Content | Size now | Recoverable without backup? | Requirement |
-|---|---|---|---|---|
-| 1. Metadata | `LIBRARY.yaml`, `PRODUCT.yaml`, `published_tiles.json`, every tile's `manifest.json` / `items.jsonl` / `request.yaml` / `LINEAGE.json` / `metadata/` (USGS source records), `admin/`, `catalog/current/` | **~5.0 GB** (4.75 GB source records, 0.28 GB manifests + items, ~20 MB catalog) | No: provenance, checksums and acquisition history exist only here | **must** be backed up: daily, or after each acquisition |
-| 2. Irreplaceable imagery | observations whose USGS processing version has since been replaced (USGS removes the old version; we have hit this twice) | unknown, grows over time | **No**: cannot be downloaded again | **should** be backed up or snapshotted |
-| 3. Other imagery | everything else | ~12.5 TB | yes, by re-running DataLoader: about 1.4 TB per day of exclusive use of one USGS account (≈ 9 days for today's library) | snapshot or replicate if the volume allows; otherwise accept the re-download time |
-
-Exclude `.state/` (run bookkeeping) and old catalog builds
-(`catalog/2*/` other than the one `current` points to).
-
-During a migration by hard links the old project-named paths and the new
-library paths share the same files. A backup that does not preserve hard
-links (for example `rsync` without `-H`) would store everything twice
-(~25 TB instead of ~12.5 TB).
-
-### Recovery
-
-- **Lost or damaged imagery:** `imagery-library verify` (sha256 of every
-  file against the manifest) finds it; re-running the tile's acquisition
-  downloads exactly the missing or damaged observations again (DataLoader
-  treats a missing or wrong-size file as not acquired). Retired processing
-  versions fail at this step; that is the reason for tier 2.
-- **Lost metadata with intact imagery:** without tier 1 the files cannot be
-  verified or attributed; the tile would have to be re-acquired. Hence "must".
-- **Catalog:** never needs restoring; `imagery-library catalog` rebuilds it
-  from the tiles in about 12 s for the current library.
+The policy (tiers, minimum and preferred, the cost of re-acquiring) is in
+[library-backup-policy.md](library-backup-policy.md). In short: ~5 GB of
+metadata **must** be backed up daily; imagery USGS has since retired
+(listed by `imagery-library backup-list --tier irreplaceable`, empty
+today) **should** be; the remaining ~12.5 TB can be re-acquired in about
+8.5 days of exclusive USGS account time, or not at all once USGS stops
+distributing Collection 2. What we ask of storage: a backed-up location
+for tier 1, and ideally snapshots or a replica for the imagery.
 
 ## Other storage requirements
 

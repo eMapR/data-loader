@@ -267,8 +267,12 @@ def import_archive(lib: Library, product: Product, src, *, mode: str = "hardlink
             shutil.rmtree(stage, ignore_errors=True)
             raise
         tp.action = "imported"
+        from imagery_library.permissions import apply_quietly
+
+        apply_quietly(lib, [tp.dest])
         append_jsonl(lib.admin_dir / "imports.jsonl", {k: v for k, v in lineage.items() if k != "source"}
                      | {"source": str(src), "dest": str(tp.dest.relative_to(lib.root))})
+        apply_quietly(lib, [lib.admin_dir])
         log(f"  {tp.tile}: imported {tp.counts['acquired']} observations, {len(tp.files)} files "
             f"({tp.bytes / 1e9:.1f} GB, {mode}) -> {tp.dest.relative_to(lib.root)}")
     result.source_unchanged = _source_fingerprint(src) == before

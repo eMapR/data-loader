@@ -12,6 +12,8 @@ Maintainers:
     imagery-library acquire ROOT ...            run those tiles one at a time, queued per source account
     imagery-library verify ROOT                 DataLoader verify on every tile, logged for the catalog
     imagery-library catalog ROOT                rebuild the catalog
+    imagery-library permissions ROOT [--fix]    check (or apply) the permission policy
+    imagery-library backup-list ROOT --tier T   paths to back up: metadata | irreplaceable | imagery
 
 Exit codes: 0 ok; 2 invalid input; 4 verify/import found problems.
 """
@@ -31,7 +33,7 @@ _QUERY_KEYS = {"aoi", "start", "end", "product", "version", "platforms", "max_cl
 
 def cmd_init(a) -> int:
     lib = init_library(a.root, name=a.name, description=a.description, maintainers=a.maintainer or [],
-                       contact=a.contact)
+                       contact=a.contact, group=a.group)
     print(f"created library {lib.name!r} at {lib.root}")
     return 0
 
@@ -94,6 +96,42 @@ def cmd_verify(a) -> int:
     return 4 if any(r["ok"] is False for r in rows) else 0
 
 
+def cmd_permissions(a) -> int:
+    from imagery_library.permissions import Policy, apply
+
+    lib = open_library(a.root)
+    pol = Policy.from_library(lib)
+    rep = apply(lib, [Path(t) for t in a.path] if a.path else None, fix=a.fix, policy=pol)
+    modes = ", ".join(f"{k} {v:04o}" for k, v in pol.modes.items())
+    print(f"policy: group {pol.group or '(unchanged)'}; {modes}")
+    if pol.group is None:
+        print("warning: no permissions.group in LIBRARY.yaml: files keep whatever group they were created with, "
+              "and setgid directories may not be settable; set it to the maintainers' group")
+    print(f"checked {rep.checked} paths; {'changed ' + str(rep.changed) if a.fix else 'differ: ' + str(len(rep.problems))}"
+          + (f"; {rep.acl} carry POSIX ACLs (the mode sets their mask)" if rep.acl else ""))
+    for p in [p for p in rep.problems if p][:20]:
+        print(f"  {p}")
+    return 4 if rep.problems else 0
+
+
+def cmd_backup_list(a) -> int:
+    from imagery_library.backup import backup_list
+
+    lib = open_library(a.root)
+    n = 0
+    out = open(a.out, "w") if a.out else sys.stdout
+    try:
+        for rel in backup_list(lib, a.tier):
+            out.write(rel + "\n")
+            n += 1
+    finally:
+        if a.out:
+            out.close()
+    if a.out:
+        print(f"{n} paths ({a.tier}) -> {a.out}; e.g. rsync -a --files-from={a.out} {lib.root}/ DEST/")
+    return 0
+
+
 def cmd_catalog(a) -> int:
     from imagery_library.catalog import build_catalog
 
@@ -152,6 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--description", required=True)
     sp.add_argument("--maintainer", action="append", help="repeat for each maintainer")
     sp.add_argument("--contact")
+    sp.add_argument("--group", help="maintainers' group: owns everything (permissions.group)")
     sp.set_defaults(fn=cmd_init)
     sp = sub.add_parser("add-product", help="install a PRODUCT.yaml")
     sp.add_argument("root")
@@ -190,6 +229,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--tile", action="append")
     sp.add_argument("--no-checksums", action="store_true")
     sp.set_defaults(fn=cmd_verify)
+    sp = sub.add_parser("permissions", help="check (or with --fix apply) the permission policy")
+    sp.add_argument("root")
+    sp.add_argument("--fix", action="store_true")
+    sp.add_argument("--path", action="append", help="only below these paths (repeat)")
+    sp.set_defaults(fn=cmd_permissions)
+    sp = sub.add_parser("backup-list", help="paths to back up, by tier")
+    sp.add_argument("root")
+    sp.add_argument("--tier", required=True, choices=["metadata", "irreplaceable", "imagery"])
+    sp.add_argument("--out", help="write the list here (default: stdout)")
+    sp.set_defaults(fn=cmd_backup_list)
     sp = sub.add_parser("catalog", help="rebuild the catalog")
     sp.add_argument("root")
     sp.set_defaults(fn=cmd_catalog)

@@ -43,6 +43,7 @@ import numpy as np
 from data_loader._version import __version__
 from data_loader.aoi import auto_utm_epsg, target_grid
 from data_loader.config import Config, ConfigError, SensorSpec, TimeWindow
+from data_loader.account_lock import account_lock_for
 from data_loader.dataset import DatasetWriter, open_dataset
 from data_loader.geotiff import sha256, write_float32, write_raster
 from data_loader.indices import compute_index, required_raw_bands
@@ -105,6 +106,7 @@ class SensorPlan:
     units: list
     filtered: list  # (SceneRef, grid_id, TimeWindow, reason)
     excluded_versions: list
+    superseded: list = field(default_factory=list)  # (SceneRef, grid_id, TimeWindow, newer item id)
 
 
 @dataclass
@@ -306,10 +308,18 @@ def discover(config: Config, provider=None, *, today: Optional[date] = None,
             groups.append(("aoi", grid, refs))
             grid_infos.setdefault(sensor, {})["aoi"] = info
 
-        units, filtered, grids = [], [], {}
+        units, filtered, grids, superseded = [], [], {}, []
         max_cloud = config.filters.max_cloud_percent
         for grid_id, grid, refs in groups:
             grids[grid_id] = grid
+            refs, older = current_versions(provider, refs)
+            for ref, newer in older:
+                w = window_for(ref.date)
+                if w is not None and config.temporal_mode == "scene":
+                    superseded.append((ref, grid_id, w, newer.id))
+            if older:
+                log(f"[discover] {sensor} {grid_id}: {len(older)} older processing version(s) listed alongside "
+                    "a newer one; the newer is current, the older recorded as superseded")
             by_season: dict[int, list] = {}
             in_windows = 0
             for ref in sorted(refs, key=lambda r: (r.date, r.id)):
@@ -335,11 +345,38 @@ def discover(config: Config, provider=None, *, today: Optional[date] = None,
                                           sensor=sensor, grid_id=grid_id, grid=grid, window=w,
                                           scenes=by_season.get(w.season_year, [])))
         sensors.append(SensorPlan(sensor=sensor, contract=contract, grids=grids, units=units,
-                                  filtered=filtered, excluded_versions=excluded))
+                                  filtered=filtered, excluded_versions=excluded, superseded=superseded))
     return Plan(config=config, today=today, windows=windows, sensors=sensors), grid_infos
 
 
 # -- rows -----------------------------------------------------------------------
+
+def current_versions(provider, refs: list) -> tuple[list, list]:
+    """Split a tile's discovered items into the current inventory and older
+    processing versions of the same acquisitions: (current, [(older, newer)]).
+    Providers that can tell versions apart define acquisition_key() and
+    processing_rank(); others get every item as current. A tie keeps both."""
+    key_fn = getattr(provider, "acquisition_key", None)
+    rank_fn = getattr(provider, "processing_rank", None)
+    if not callable(key_fn) or not callable(rank_fn):
+        return list(refs), []
+    groups: dict = {}
+    for r in refs:
+        k = key_fn(r)
+        groups.setdefault(k if k is not None else ("_single", r.id), []).append(r)
+    current, older = [], []
+    for k, group in groups.items():
+        if len(group) == 1:
+            current.extend(group)
+            continue
+        ranked = sorted(group, key=lambda r: rank_fn(r) or "")
+        newest = ranked[-1]
+        ties = [r for r in ranked if (rank_fn(r) or "") == (rank_fn(newest) or "")]
+        current.extend(ties)
+        older.extend((r, newest) for r in ranked if r not in ties)
+    current.sort(key=lambda r: (r.date, r.id))
+    return current, older
+
 
 def _scene_row_base(unit: Unit, scene: SceneRef) -> dict:
     prov = scene.provenance
@@ -662,7 +699,7 @@ def manifest_core(plan: Plan, provider, grid_infos: dict, software: Optional[dic
 # -- run ------------------------------------------------------------------------
 
 def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], None] = print,
-        provider=None) -> RunSummary:
+        provider=None, wait_for_account: bool = False) -> RunSummary:
     """Discover and acquire everything `config` asks for that isn't already
     in its output directory. Safe to re-run; see the module docstring."""
     t_start = time.perf_counter()
@@ -672,6 +709,17 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
         raise ConfigError("cannot read from this provider yet:\n  " + "\n  ".join(problems))
     config = canonical_tiles(config, provider)
     root = Path(config.output.dir)
+    account = account_lock_for(provider, root)  # one run per source account, before touching the dataset
+    if account is not None:
+        account.acquire(wait_for_account, log=log)
+    try:
+        return _run_locked(config, provider, root, today, log, t_start)
+    finally:
+        if account is not None:
+            account.release()
+
+
+def _run_locked(config: Config, provider, root: Path, today, log, t_start) -> RunSummary:
     writer = DatasetWriter(root, recorded_request(config, provider))
     try:
         for tmp in root.glob("*/*/*/*.tif.tmp"):  # files a killed run was writing
@@ -693,6 +741,12 @@ def run(config: Config, *, today: Optional[date] = None, log: Callable[[str], No
                 u = Unit(key=f"{sp.sensor}/{grid_id}/{ref.id}", kind="scene", sensor=sp.sensor, grid_id=grid_id,
                          grid=sp.grids[grid_id], window=w, scene=ref)
                 writer.note({**_scene_row_base(u, ref), "status": "filtered", "reason": reason})
+            for ref, grid_id, w, newer_id in sp.superseded:
+                u = Unit(key=f"{sp.sensor}/{grid_id}/{ref.id}", kind="scene", sensor=sp.sensor, grid_id=grid_id,
+                         grid=sp.grids[grid_id], window=w, scene=ref)
+                writer.supersede({**_scene_row_base(u, ref), "supersededBy": newer_id,
+                                  "reason": "a newer processing version of this acquisition is in the source's "
+                                            "current inventory"})
             for u in sp.units:
                 old = writer.row(u.key) or {}
                 stale_composite = (u.kind == "composite" and old.get("status") == "acquired"
@@ -877,6 +931,7 @@ def plan_summary(config: Config, *, today: Optional[date] = None, log: Callable[
             units = [u for u in sp.units if u.grid_id == grid_id]
             rows.append({"sensor": sp.sensor, "grid": grid_id, "units": len(units),
                          "acquired": sum(u.key in acquired_keys for u in units),
-                         "filtered": sum(1 for f in sp.filtered if f[1] == grid_id)})
+                         "filtered": sum(1 for f in sp.filtered if f[1] == grid_id),
+                         "superseded": sum(1 for f in sp.superseded if f[1] == grid_id)})
     return {"span": (plan.windows[0].start, plan.windows[-1].end), "windows": len(plan.windows),
             "temporalMode": config.temporal_mode, "grids": rows, "warnings": warnings_}

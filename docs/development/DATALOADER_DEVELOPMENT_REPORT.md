@@ -574,6 +574,35 @@ verified and all 94 test observations were `verified`. Production metadata
 re-imported (metadata-only) into a new shadow library: 36 tiles, 134,766
 observations, sources unchanged.
 
+### Superseded versions, account lock, permissions (2026-10-26, DataLoader 1.2)
+
+- **Superseded processing versions.** USGS STAC still lists retired ARD
+  versions next to their replacements (checked live: all three production
+  failures, e.g. `LC08_CU_002006_20240608_20260113` next to `..._20260202`),
+  while M2M returns no download options for them. Discovery now groups
+  items by acquisition and records older versions as `superseded`
+  (`supersededBy`, earlier failure under `history`); an older version
+  already acquired stays `acquired` with `supersededBy` (those files are
+  the irreplaceable backup tier). Output contract 1.2. Reproduced live with
+  the old code (83c4f19: three `TypeError` attempts, exit 3) and resolved
+  with the new code on the same data (no download, row `superseded`, tile
+  complete). Production has no acquisition stored twice.
+- **Account lock in DataLoader.** `data-loader run` holds a per-account
+  flock (`$DATALOADER_LOCK_DIR`; key = hash of the M2M user name) for the
+  whole run; exit 6 or `--wait-for-account`. Live: while
+  `imagery-library acquire` downloaded a tile, a direct `data-loader run`
+  on the same account exited 6 in under a second without touching its
+  dataset; with `--wait-for-account` it waited 3 min 16 s and started the
+  moment the other run released the account.
+- **Permissions.** Applied by every library command and audited by
+  `imagery-library permissions`. Found on `/vol/v1/data`: Linux drops the
+  setgid bit when the caller is not in the file's group (files inherit
+  `trenders` there), so the policy needs `permissions.group`; every path
+  carries a default ACL (the mode becomes its mask).
+- **Backup tiers** (`imagery-library backup-list`): metadata ~5.0 GB for
+  production; irreplaceable imagery 0 files today; re-acquiring the rest
+  ~8.5 days of exclusive account time (docs/library-backup-policy.md).
+
 ## Scaling limitations identified
 
 **Fundamental / external (not something DataLoader controls):**

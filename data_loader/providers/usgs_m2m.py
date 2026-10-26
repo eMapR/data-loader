@@ -151,6 +151,12 @@ class UsgsM2mProvider:
             self._session = None
             self._session_born = None
 
+    def account_lock_key(self) -> str:
+        """Runs on one M2M account must not overlap (see data_loader.account_lock)."""
+        from data_loader.providers.base import usgs_m2m_account_lock_key
+
+        return usgs_m2m_account_lock_key(self.username)
+
     def capabilities(self) -> dict[str, ProductIdentity]:
         return {"landsat": ProductIdentity(sensor="landsat", product_family=USGS_C2_L2, temporal_product=SCENE)}
 

@@ -194,3 +194,11 @@ class Provider(Protocol):
         supported" so engine.py falls back to its generic
         search_scenes + read_scene_bands + local reduce path."""
         return None
+
+
+def usgs_m2m_account_lock_key(username: Optional[str]) -> str:
+    """Lock key for runs on one USGS M2M account (one download session per
+    account). A hash, so the account name never appears in lock files."""
+    import hashlib
+
+    return "usgs_m2m-" + hashlib.sha256((username or "").encode()).hexdigest()[:12]

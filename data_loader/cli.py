@@ -11,7 +11,8 @@ Exit codes: 0 ok; 1 unexpected error; 2 invalid config/request;
 3 run finished but some acquisitions are failed or still pending
 (re-run to retry); 4 verify (or upgrade --check-files) found problems;
 5 run stopped itself (disk full, credentials rejected, source down for
-hours) -- fix the cause and re-run; 130 interrupted.
+hours) -- fix the cause and re-run; 6 another run holds the source account
+(USGS M2M: one run per account) -- nothing was done; 130 interrupted.
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ import sys
 from datetime import datetime
 
 from data_loader._version import __version__
+from data_loader.account_lock import AccountBusy
 from data_loader.config import ConfigError, load_config
 from data_loader.dataset import DatasetError, open_dataset
 from data_loader.engine import RunStopped
@@ -66,10 +68,10 @@ def cmd_plan(args) -> int:
 
     s = plan_summary(_load(args), log=_log)
     print(f"\n{s['temporalMode']} units over {s['span'][0]}..{s['span'][1]} ({s['windows']} window(s)):")
-    print(f"  {'sensor':10} {'grid':12} {'units':>7} {'acquired':>9} {'to do':>7} {'filtered':>9}")
+    print(f"  {'sensor':10} {'grid':12} {'units':>7} {'acquired':>9} {'to do':>7} {'filtered':>9} {'superseded':>10}")
     for r in s["grids"]:
         print(f"  {r['sensor']:10} {r['grid']:12} {r['units']:7d} {r['acquired']:9d} "
-              f"{r['units'] - r['acquired']:7d} {r['filtered']:9d}")
+              f"{r['units'] - r['acquired']:7d} {r['filtered']:9d} {r['superseded']:10d}")
     tot = sum(r["units"] for r in s["grids"])
     done = sum(r["acquired"] for r in s["grids"])
     print(f"  {'total':23} {tot:7d} {done:9d} {tot - done:7d}")
@@ -86,7 +88,7 @@ def cmd_run(args) -> int:
         from dataclasses import replace
 
         cfg = replace(cfg, workers=args.workers)
-    summary = run(cfg, log=_log)
+    summary = run(cfg, log=_log, wait_for_account=args.wait_for_account)
     print(f"\nmanifest: {summary.manifest}")
     if not summary.complete:
         print("some acquisitions are failed or pending -- run the same command again to retry "
@@ -167,6 +169,8 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--output-dir", help="override output.dir from the config")
         if name == "run":
             sp.add_argument("--workers", type=int, help="override workers from the config")
+            sp.add_argument("--wait-for-account", action="store_true",
+                            help="if another run holds the source account, wait for it instead of exiting (6)")
         sp.set_defaults(fn=fn)
     sp = sub.add_parser("status", help="progress of a dataset directory")
     sp.add_argument("dir")
@@ -203,6 +207,9 @@ def main(argv=None) -> int:
     except RunStopped as e:
         print(f"error: {e}", file=sys.stderr)
         return 5
+    except AccountBusy as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 6
     except KeyboardInterrupt:
         print("\ninterrupted -- finished acquisitions are saved; run the same command to resume", file=sys.stderr)
         return 130

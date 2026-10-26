@@ -49,7 +49,7 @@ class UpgradeTests(unittest.TestCase):
             after = [(Path(tmp) / f["path"]).stat().st_mtime_ns for x in read_items(tmp) for f in x.get("files", [])]
         self.assertTrue(r.written)
         self.assertEqual(r.check_problems, [])
-        self.assertEqual(m["schemaVersion"], "1.1")
+        self.assertEqual(m["schemaVersion"], "1.2")
         self.assertEqual(m["bandSets"]["landsat"]["bands"][2]["nodata"], 0)
         self.assertEqual(rows["scene-1"]["files"][0]["bandScaleOffset"],
                          {"blue": [2.75e-5, -0.2], "nir": [2.75e-5, -0.2], "qa_pixel": [1.0, 0.0]})
@@ -108,7 +108,7 @@ class UpgradeTests(unittest.TestCase):
             self.assertEqual(main(["upgrade", tmp, "--dry-run", "--check-files", "1"]), 0)
             self.assertEqual(main(["upgrade", tmp, "--run", "yesterday=abc"]), 2)
             self.assertEqual(main(["upgrade", tmp]), 0)
-            self.assertEqual(json.loads((Path(tmp) / "manifest.json").read_text())["schemaVersion"], "1.1")
+            self.assertEqual(json.loads((Path(tmp) / "manifest.json").read_text())["schemaVersion"], "1.2")
 
 
 if __name__ == "__main__":

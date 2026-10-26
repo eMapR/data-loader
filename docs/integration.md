@@ -239,5 +239,7 @@ ds = open_dataset(summary.output_dir)
 `run` raises `ConfigError` for an invalid request, `DatasetError` if the
 output directory holds a different dataset or is locked by another run,
 and `RunStopped` (exit code 5 on the command line) if it stopped itself
-because of a disk, credential or prolonged source problem; re-running
-resumes in every case.
+because of a disk, credential or prolonged source problem, and
+`data_loader.account_lock.AccountBusy` (exit code 6) if another run holds
+the source account (pass `wait_for_account=True` to queue instead);
+re-running resumes in every case.

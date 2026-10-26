@@ -7,7 +7,7 @@ contract.
 
 ```
 <output.dir>/
-  manifest.json                 dataset-level description (schema "dataloader-manifest", version 1.1)
+  manifest.json                 dataset-level description (schema "dataloader-manifest", version 1.2)
   items.jsonl                   one JSON object per line: every acquisition (or composite) and its status
   request.yaml                  the resolved request that produced the dataset
   metadata/<provider>/<id>.json the provider's original metadata record for each source item, verbatim
@@ -29,7 +29,7 @@ and offset, missing acquisitions, reading while a run is in progress), see
 ```jsonc
 {
   "schema": "dataloader-manifest",
-  "schemaVersion": "1.1",
+  "schemaVersion": "1.2",
   "dataset": {
     "created": "2026-10-08T...", "updated": "...",
     "complete": true,                 // nothing pending or failed
@@ -85,7 +85,7 @@ and offset, missing acquisitions, reading while a run is in progress), see
   "coverage": {
     "timeWindows": [{"seasonYear": 1990, "start": "1990-01-01", "end": "1990-12-31"}, ...],
     "openEnded": true, "discoveredThrough": "2026-10-08",
-    "counts": {"acquired": 88931, "failed": 1, "pending": 0, "filtered": 0},
+    "counts": {"acquired": 88931, "failed": 0, "pending": 0, "filtered": 0, "superseded": 1},
     "firstAcquired": "1990-01-02", "lastAcquired": "2026-10-05", "bytes": 4.6e12,
     "excludedProcessingVersions": {}
   },
@@ -108,7 +108,7 @@ per grid), sorted by sensor, grid and date. A **scene** row:
 {
   "key": "landsat/h003v004/LT05_CU_003004_19900102_20210423_02_SR",   // stable unique id
   "type": "scene",
-  "status": "acquired",               // acquired | failed | pending | filtered
+  "status": "acquired",               // acquired | failed | pending | filtered | superseded (1.2)
   "sensor": "landsat", "grid": "h003v004", "seasonYear": 1990,
   "date": "1990-01-02", "datetime": "1990-01-02T18:21:03.517000Z",
   "itemId": "LT05_CU_003004_19900102_20210423_02_SR",   // provider item id
@@ -148,6 +148,12 @@ metadata snapshot), `failedSources`, and `method` (`local` or `provider`).
 | `failed` | Every attempt so far failed. `error` holds the last message (URL query strings, which can carry signed tokens, are shown as `?<redacted>`) and `attempts` the count. A run retries failures until `max_attempts` in total; a later run continues if attempts remain. |
 | `pending` | Discovered but not acquired yet: the run was interrupted, or is still in progress. |
 | `filtered` | Excluded by `filters.max_cloud_percent`. `reason` says why. Nothing is written. |
+| `superseded` | (1.2) The source lists a newer processing version of the same acquisition (`supersededBy`), so this older version is not acquired. USGS keeps retired ARD versions in STAC after it stops distributing them. If the row had failed before, `history` keeps its earlier status, attempts and error. Not counted as failed or pending: completeness is judged against the current inventory. |
+
+An older processing version that was **acquired** before a newer one
+appeared stays `acquired` (its files are the historical record, and often
+can no longer be downloaded) and gains `supersededBy`. Both are re-derived
+at every run from what the source lists, like `filtered`.
 
 So `items.jsonl` answers "what exists for this request, and what did we
 get?". Missing and failed observations are explicit, not just absent.
@@ -236,6 +242,9 @@ two apart.
   A change that removes or renames a field, or changes its meaning,
   bumps the major version, and `open_dataset` refuses a major version it
   doesn't know.
+- 1.2 adds the `superseded` status, `supersededBy` and `history` on rows,
+  and `coverage.counts.superseded`. Nothing else changes; a 1.1 dataset is
+  written as 1.2 at its next run.
 - A 1.0 dataset is read as is by 1.1 (`open_dataset` accepts any 1.x).
   Running 1.1 into it upgrades its manifest on the next catalog write. To
   upgrade without a run, and to fill in per-file scale/offset and the

@@ -64,6 +64,15 @@ see.
 : A newer DataLoader wrote this dataset. Upgrade DataLoader; this version
   won't modify it.
 
+## Another run holds the account (exit code 6)
+
+**`another run is using this source account (lock ...: pid N on HOST since ... -> DIR)`**
+: Only one run per USGS M2M account may run at a time. Wait for the run
+  named in the message, or re-run with `--wait-for-account` to queue
+  behind it. Nothing was written. If no such run exists, the lock is
+  already free (it is released when a process exits, however it ends):
+  just re-run.
+
 ## Run stopped (exit code 5)
 
 **`stopped: output disk: No space left on device`** (or quota, read-only)

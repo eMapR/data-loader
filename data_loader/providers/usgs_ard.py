@@ -100,7 +100,8 @@ from data_loader.product_contract import (
     ProductIdentity,
     parse_version_policy,
 )
-from data_loader.providers.base import Grid, NativeEncoding, NativeRead, SceneRef, SystemicError, redact_urls
+from data_loader.providers.base import (Grid, NativeEncoding, NativeRead, SceneRef, SystemicError, redact_urls,
+                                        usgs_m2m_account_lock_key)
 from data_loader.tiles import UsgsArdGrid, item_tile_id
 
 STAC_URL = "https://landsatlook.usgs.gov/stac-server"
@@ -398,6 +399,26 @@ class UsgsArdProvider:
             ))
         return refs
 
+    def account_lock_key(self) -> str:
+        """Runs on one M2M account must not overlap (see data_loader.account_lock)."""
+        return usgs_m2m_account_lock_key(self.username)
+
+    @staticmethod
+    def acquisition_key(ref: SceneRef) -> Optional[str]:
+        """The acquisition an ARD item belongs to, independent of USGS's
+        processing date: LC08_CU_002006_20240608_20260113_02_SR ->
+        LC08_CU_002006_20240608_02_SR. Items sharing a key are processing
+        versions of one observation (USGS lists retired versions in STAC
+        after it stops distributing them)."""
+        parts = ref.id.split("_")
+        return "_".join(parts[:4] + parts[5:]) if len(parts) >= 6 else None
+
+    @staticmethod
+    def processing_rank(ref: SceneRef) -> Optional[str]:
+        """Sorts processing versions of one acquisition, newest last."""
+        parts = ref.id.split("_")
+        return parts[4] if len(parts) >= 6 else None
+
     def search_tile(self, tile_id: str, sensor: str, start, end, max_cloud_percent=None,
                     processing_version_policy="any") -> list[SceneRef]:
         """Every ARD item of one tile in [start, end], on the tile's own
@@ -563,6 +584,12 @@ class UsgsArdProvider:
             "download-options",
             {"datasetName": M2M_DATASET, "entityIds": [tile_product_id]},
         )
+        if not options:
+            raise RuntimeError(
+                f"[usgs_ard] tile {tile_product_id}: USGS offers no download for this item "
+                "(download-options returned nothing). USGS keeps listing retired processing "
+                "versions in STAC after it stops distributing them; if a newer version of this "
+                "acquisition exists, DataLoader records this one as 'superseded'.")
         band_option = next(
             (o for o in options if o.get("productCode") == BAND_DOWNLOAD_PRODUCT_CODE), None
         )

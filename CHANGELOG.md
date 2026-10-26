@@ -3,6 +3,22 @@
 ## Unreleased
 
 ### Added
+- **`superseded` status (output contract 1.2).** USGS keeps listing an ARD
+  item's retired processing version in STAC after it stops distributing
+  it, and the download then failed (`'NoneType' object is not iterable`):
+  3 such rows kept the Oregon and Columbia archives "incomplete". Discovery
+  now groups items by acquisition (`acquisition_key`/`processing_rank` on
+  the provider), treats the newest version as current, and records older
+  ones as `superseded` with `supersededBy`, keeping any earlier failure
+  under `history`; an older version already acquired stays `acquired` with
+  `supersededBy`. Completeness is judged against the current inventory.
+  `plan` shows a superseded column. A null `download-options` now fails
+  with a clear message.
+- **One run per USGS account, enforced.** `data-loader run` holds a lock
+  for the provider's account (`$DATALOADER_LOCK_DIR`, default
+  `~/.cache/data-loader/locks`) and exits with code 6 if another run holds
+  it, or queues with `--wait-for-account`. Point `DATALOADER_LOCK_DIR` at a
+  shared directory to cover several people and machines.
 - **Native Alaska and Hawaii ARD grids.** `aoi.tiles` now takes
   region-qualified USGS ARD tile ids: `AK_h021v008` (Alaska grid),
   `HI_h001v001` (Hawaii), `CU_h003v004` (CONUS). Each region has its own

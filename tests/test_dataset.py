@@ -30,7 +30,7 @@ class ManifestContentTests(unittest.TestCase):
             run_with(FakeProvider(july(2), native=True), make_config(tmp, output=ARCHIVE))
             m = _manifest(tmp)
             row = read_items(tmp)[0]
-        self.assertEqual((m["schema"], m["schemaVersion"]), ("dataloader-manifest", "1.1"))
+        self.assertEqual((m["schema"], m["schemaVersion"]), ("dataloader-manifest", "1.2"))
         self.assertEqual(m["request"]["provider"], "fake")
         self.assertTrue(m["dataset"]["complete"])
         bands = m["bandSets"]["landsat"]["bands"]
@@ -323,7 +323,7 @@ class DirectoryProtectionTests(unittest.TestCase):
             s = run_with(FakeProvider(july(2), native=True), make_config(tmp, output=ARCHIVE))
             m = json.loads(mp.read_text())
         self.assertEqual((s.already_done, s.acquired_now), (1, 1))
-        self.assertEqual(m["schemaVersion"], "1.1")
+        self.assertEqual(m["schemaVersion"], "1.2")
         self.assertEqual(len(m["dataset"]["runs"]), 1)
 
     def test_interrupted_journal_line_is_ignored(self):

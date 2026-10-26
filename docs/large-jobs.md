@@ -84,8 +84,16 @@ The run discovers everything first (about 15 s per tile), then acquires.
 It logs progress every minute: done, failed, seconds per observation,
 hours left.
 
-- **Use one run per USGS account.** M2M allows one call at a time per
-  account; a second job on the same account slows both.
+- **One run per USGS account, enforced.** M2M allows one session per
+  account; two runs on one account make each other fail. `data-loader run`
+  holds an account lock for the whole run (named by a hash of
+  `USGS_M2M_USERNAME`) and a second run on the same account exits with
+  code `6` before touching anything, or waits with `--wait-for-account`.
+  The lock lives in `$DATALOADER_LOCK_DIR` (default
+  `~/.cache/data-loader/locks`, i.e. per user and machine): put
+  `DATALOADER_LOCK_DIR=<shared directory>` in the same env file as the
+  credentials so every person and machine using the account shares it
+  (NFSv4 holds the lock on the server).
 - **`workers: 4`** is a good default. M2M calls queue internally, and
   downloads and writes overlap. Going beyond about 4 gains little.
 - **Memory:** the working set is about 1 GB per worker for full tiles plus
@@ -134,8 +142,10 @@ data-loader run my_archive.yaml
   `failed`, with the last error, in `items.jsonl`. To try again later,
   raise `max_attempts` and re-run.
 - Exit code `0` means complete, `3` means some observations are failed
-  or pending (re-run to retry), and `2` means a config or directory
-  problem.
+  or pending (re-run to retry), `2` means a config or directory
+  problem, and `6` that another run holds the USGS account. Older
+  processing versions that USGS lists next to a newer one are recorded as
+  `superseded`, not failed.
 - For an unattended loop that keeps retrying transient failures:
   `until data-loader run my_archive.yaml; do sleep 600; done`. This only
   stops on success, so use it with care if something fails permanently.

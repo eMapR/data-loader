@@ -24,6 +24,8 @@ Safe during acquisitions:
 TILE STATES
     acquisition:  updating    a DataLoader run holds the tile now
                   incomplete  failed or pending observations, or the last run did not finish
+                              (superseded processing versions do not count: completeness is
+                              judged against the source's current inventory)
                   complete    everything discovered so far is acquired
     verification: verified            last verify passed and covers every observation
                   partially_verified  last verify passed; observations added since are not covered
@@ -160,6 +162,8 @@ def _tile_records(lib: Library, product, system: str, tile: str, path: Path, ver
         "acquisition_state": acq_state, "verification_state": ver_state,
         "observations": counts["acquired"], "verified_observations": n_verified,
         "failed": counts["failed"], "pending": counts["pending"], "filtered": counts["filtered"],
+        "superseded": counts.get("superseded", 0),
+        "retired_versions_held": sum(1 for r in acquired if r.get("supersededBy")),
         "failed_example": (failed[0].get("error") or "")[:300] if failed else None,
         "first_date": min((r["date"] for r in acquired if r.get("date")), default=None),
         "last_date": max((r["date"] for r in acquired if r.get("date")), default=None),
@@ -189,6 +193,7 @@ def _tile_records(lib: Library, product, system: str, tile: str, path: Path, ver
             "processing_date": prov.get("generation_time"), "processing_baseline": prov.get("processing_baseline"),
             "path": f"{rel}/{f['path']}" if f.get("path") else None, "bytes": f.get("bytes"), "sha256": f.get("sha256"),
             "files": len(r.get("files", [])), "written": r.get("updated"),
+            "superseded_by": r.get("supersededBy"),  # a newer version exists: this file is likely irreplaceable
             "source_verified": bool(si.get("of")) and si.get("files") == si.get("of"),
             "verified": obs_verified(r),
             "dataloader_commit": (r.get("software") or {}).get("gitCommit"),
@@ -273,6 +278,9 @@ def build_catalog(lib: Library, *, log=print) -> Path:
         os.replace(tmp, link)
         fsync_dir(lib.catalog_dir)
         _prune(lib, out.resolve())
+        from imagery_library.permissions import apply_quietly
+
+        apply_quietly(lib, [out, lib.catalog_dir / BUILD_LOCK])
     log(f"catalog {build_id}: {len(tiles)} tiles, {len(obs)} observations "
         f"({summary['verified_observations']} verified), {summary['bytes'] / 1e12:.3f} TB; "
         + ", ".join(f"{s} {n}" for d in states.values() for s, n in sorted(d.items()))
@@ -325,6 +333,9 @@ def verify_tiles(lib: Library, *, product: Optional[str] = None, tiles: Optional
                "examples": problems[:10], "seconds": round(time.monotonic() - t0, 1), "software": sw}
         append_jsonl(lib.admin_dir / VERIFY_LOG, row)
         results.append(row)
+        from imagery_library.permissions import apply_quietly
+
+        apply_quietly(lib, [lib.admin_dir])
         log(f"  {rel}: {'OK' if not problems else f'{len(problems)} problem(s)'} "
             f"({files} files, {'sha256' if checksums else 'sizes'}, {row['seconds']} s)")
     return results

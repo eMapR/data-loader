@@ -25,9 +25,9 @@ from typing import Iterator, Optional
 from data_loader.config import request_identity
 
 MANIFEST_SCHEMA = "dataloader-manifest"
-MANIFEST_VERSION = "1.1"
+MANIFEST_VERSION = "1.2"
 STATE_DIR = ".state"
-STATUSES = ("acquired", "failed", "pending", "filtered")
+STATUSES = ("acquired", "failed", "pending", "filtered", "superseded")
 
 
 class DatasetError(RuntimeError):
@@ -196,6 +196,29 @@ class DatasetWriter:
             old = self._rows.get(row["key"])
             if old is None or old.get("status") in ("pending", "filtered"):
                 self._rows[row["key"]] = row
+
+    def supersede(self, row: dict) -> bool:
+        """A newer processing version of this acquisition is in the source's
+        current inventory (row["supersededBy"]). An acquired older version
+        stays acquired -- it is the historical record, and often no longer
+        downloadable -- and only gains `supersededBy`; anything else becomes
+        status "superseded", keeping what happened to it before under
+        `history`. Re-derived every run, like "filtered". True if the row is
+        now "superseded"."""
+        with self._mutex:
+            old = self._rows.get(row["key"])
+            if old is not None and old.get("status") == "acquired":
+                self._rows[row["key"]] = {**old, "supersededBy": row["supersededBy"]}
+                return False
+            if old is not None and old.get("status") == "superseded":
+                history = old.get("history")
+            elif old is not None and (old.get("attempts") or old.get("status") == "failed"):
+                history = {k: old[k] for k in ("status", "attempts", "error", "lastError", "updated")
+                           if old.get(k) is not None}
+            else:
+                history = None
+            self._rows[row["key"]] = {**row, "status": "superseded", **({"history": history} if history else {})}
+            return True
 
     def begin_run(self, software: dict) -> dict:
         """Start a dataset.runs entry for this run; the caller fills in its

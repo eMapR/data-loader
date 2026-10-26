@@ -12,15 +12,16 @@ Why duplicates cannot happen:
   (`Product.locate` turns CU_h003v004 into h003v004, and so on);
 - DataLoader holds an exclusive lock on that directory for a whole run, so
   a second run on the same tile fails at once instead of writing;
-- `acquire` also holds a library-wide lock per source account
-  (admin/locks/<provider>.lock) for each run, so requests from several
-  maintainers or machines queue up instead of running side by side
-  (USGS M2M allows one download session per account). A run then resumes
-  whatever an earlier one acquired.
+- DataLoader itself holds a lock per source account for every run
+  (data_loader.account_lock; USGS M2M allows one session per account).
+  `acquire` points it at the library (DATALOADER_LOCK_DIR=admin/locks) and
+  queues behind it (--wait-for-account); maintainers put the same
+  DATALOADER_LOCK_DIR in their credentials env file, so a direct
+  `data-loader run` honours the same lock. A run then resumes whatever an
+  earlier one acquired.
 """
 from __future__ import annotations
 
-import fcntl
 import os
 import subprocess
 import sys
@@ -32,7 +33,7 @@ from typing import Optional
 import yaml
 
 from imagery_library.grids import tiles_for_aoi
-from imagery_library.layout import Library, LibraryError, Product, append_jsonl, software
+from imagery_library.layout import ADMIN_DIR, Library, LibraryError, Product, append_jsonl, software
 from imagery_library.query import read_aoi
 
 LOCK_DIR = "locks"
@@ -94,70 +95,49 @@ def write_configs(lib: Library, product: Product, needed: list[dict], out_dir, *
     return written
 
 
-class AccountLock:
-    """Library-wide exclusive lock for one source account (flock; NFSv4
-    passes it to the server, so it holds across machines)."""
-
-    def __init__(self, lib: Library, provider: str):
-        self.path = lib.admin_dir / LOCK_DIR / f"{provider}.lock"
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.fd: Optional[int] = None
-
-    def acquire(self, wait: bool, log=print) -> bool:
-        self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o664)
-        try:
-            fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            if not wait:
-                os.close(self.fd)
-                self.fd = None
-                return False
-            log(f"  waiting: another library acquisition holds {self.path.name}")
-            fcntl.flock(self.fd, fcntl.LOCK_EX)
-        os.ftruncate(self.fd, 0)
-        os.write(self.fd, f"{os.getpid()} {os.uname().nodename} {datetime.now(timezone.utc).isoformat()}\n".encode())
-        return True
-
-    def release(self) -> None:
-        if self.fd is not None:
-            os.close(self.fd)
-            self.fd = None
+def lock_dir(lib: Library) -> Path:
+    """The DATALOADER_LOCK_DIR every maintainer uses with this library."""
+    return lib.root / ADMIN_DIR / LOCK_DIR
 
 
 def acquire(lib: Library, product: Product, needed: list[dict], *, include_held: bool = False, wait: bool = True,
             data_loader: Optional[str] = None, log=print) -> list[dict]:
-    """Run DataLoader for each tile in turn, each run under the account lock.
+    """Run DataLoader for each tile in turn. DataLoader holds the account
+    lock (in the library's admin/locks) and the tile lock; this waits its
+    turn (or, with wait=False, skips tiles while the account is busy).
     Output of each run goes to admin/logs/<grid>_<tile>.log. Credentials come
     from the environment, as for `data-loader run`."""
+    from imagery_library.permissions import apply_quietly
+
     exe = data_loader or str(Path(sys.executable).with_name("data-loader"))
     cfg_dir = lib.admin_dir / "configs" / product.name / product.version
     configs = write_configs(lib, product, needed, cfg_dir, include_held=include_held)
-    provider = product.acquisition.get("provider", "unknown")
+    env = dict(os.environ, DATALOADER_LOCK_DIR=str(lock_dir(lib)))
+    lock_dir(lib).mkdir(parents=True, exist_ok=True)
+    set_dir = os.environ.get("DATALOADER_LOCK_DIR")
+    if set_dir and Path(set_dir).resolve() != lock_dir(lib).resolve():
+        log(f"  note: DATALOADER_LOCK_DIR is {set_dir} in this shell; using {lock_dir(lib)} for library runs")
     results = []
     for cfg in configs:
         r = next(x for x in needed if config_name(product, x["grid_system"], x["tile"]) == cfg.name)
-        lock = AccountLock(lib, provider)
-        if not lock.acquire(wait, log=log):
-            results.append({**r, "exit": None, "outcome": "skipped: account busy"})
-            log(f"  {r['grid_system']}/{r['tile']}: skipped, another run holds the {provider} account")
-            continue
         logf = lib.admin_dir / "logs" / f"{r['grid_system']}_{r['tile']}.log"
         logf.parent.mkdir(parents=True, exist_ok=True)
         t0 = time.monotonic()
-        try:
-            log(f"  {r['grid_system']}/{r['tile']}: data-loader run ({'update' if r['held'] else 'new'}) -> {logf.name}")
-            with open(logf, "a") as out:
-                code = subprocess.run([exe, "run", str(cfg)], stdout=out, stderr=subprocess.STDOUT).returncode
-        finally:
-            lock.release()
+        log(f"  {r['grid_system']}/{r['tile']}: data-loader run ({'update' if r['held'] else 'new'}) -> {logf.name}")
+        args = [exe, "run", str(cfg)] + (["--wait-for-account"] if wait else [])
+        with open(logf, "a") as out:
+            code = subprocess.run(args, stdout=out, stderr=subprocess.STDOUT, env=env).returncode
         outcome = {0: "complete", 3: "incomplete (failed/pending rows)", 5: "stopped (source/credentials/disk)",
-                   2: "refused (config/lock: is another run using this tile?)"}.get(code, f"error {code}")
+                   6: "skipped: account busy",
+                   2: "refused (config, or another run is using this tile)"}.get(code, f"error {code}")
         row = {**r, "exit": code, "outcome": outcome, "seconds": round(time.monotonic() - t0, 1)}
         results.append(row)
         append_jsonl(lib.admin_dir / "acquisitions.jsonl",
                      {"time": datetime.now(timezone.utc).replace(microsecond=0).isoformat(), "product": product.key,
                       **{k: row[k] for k in ("grid_system", "tile", "held", "exit", "outcome", "seconds")},
                       "software": software()})
+        tile_dir = product.tile_path(r["grid_system"], r["tile"])
+        apply_quietly(lib, [p for p in (tile_dir, lib.admin_dir) if p.exists()])
         log(f"  {r['grid_system']}/{r['tile']}: {outcome} ({row['seconds']} s)")
         if code == 5:  # the source or credentials are the problem; the next tile would fail the same way
             log("  stopping: fix the cause and run the same command again to resume")

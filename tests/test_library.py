@@ -5,6 +5,7 @@ Network-free: archives are written by the real engine with the fake provider."""
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -394,31 +395,39 @@ class SafetyTests(unittest.TestCase):
         self.assertEqual(len(fp.geoms), 2)
         self.assertLess(sum(p.bounds[2] - p.bounds[0] for p in fp.geoms), 20)
 
-    def test_acquire_runs_tiles_one_at_a_time_under_the_account_lock(self):
-        from imagery_library.acquire import AccountLock, acquire
+    def test_acquire_uses_dataloaders_account_lock_in_the_library(self):
+        from data_loader.account_lock import AccountLock
+        from imagery_library.acquire import acquire, lock_dir
         fake = Path(self.tmp.name) / "fake-data-loader"
         probe = Path(self.tmp.name) / "probe.txt"
-        lockfile = self.lib.admin_dir / "locks" / "fake.lock"
+        # stands in for `data-loader run`: takes DataLoader's real account lock the way run() does
         fake.write_text(f"""#!{sys.executable}
-import fcntl, os, sys
-fd = os.open({str(lockfile)!r}, os.O_RDWR)
+import os, sys
+sys.path.insert(0, {str(Path(__file__).resolve().parents[1])!r})
+from data_loader.account_lock import AccountBusy, AccountLock
+lock = AccountLock("acct-x", sys.argv[2])
 try:
-    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB); held = "FREE"
-except BlockingIOError:
-    held = "HELD"
-open({str(probe)!r}, "a").write(held + " " + sys.argv[2] + "\\n")
+    lock.acquire(wait="--wait-for-account" in sys.argv, log=lambda m: None)
+except AccountBusy:
+    sys.exit(6)
+open({str(probe)!r}, "a").write(os.environ["DATALOADER_LOCK_DIR"] + " " + " ".join(sys.argv[3:]) + "\\n")
+lock.release()
 """)
         fake.chmod(0o755)
         needed = tiles_needed(self.lib, self.product, tiles=["h004v004", "h004v005"])
         rows = acquire(self.lib, self.product, needed, data_loader=str(fake), log=lambda m: None)
         self.assertEqual([r["exit"] for r in rows], [0, 0])
         lines = probe.read_text().splitlines()
-        self.assertEqual([x.split()[0] for x in lines], ["HELD", "HELD"])  # each run ran under the lock
-        # a second requester does not run while the account is busy
-        other = AccountLock(self.lib, "fake")
-        self.assertTrue(other.acquire(wait=False))
-        rows = acquire(self.lib, self.product, needed, wait=False, data_loader=str(fake), log=lambda m: None)
-        other.release()
+        self.assertEqual(lines, [f"{lock_dir(self.lib)} --wait-for-account"] * 2)
+        # a direct `data-loader run` holding the account (same DATALOADER_LOCK_DIR) makes acquire skip
+        from unittest.mock import patch
+        with patch.dict(os.environ, {"DATALOADER_LOCK_DIR": str(lock_dir(self.lib))}):
+            holder = AccountLock("acct-x", "/direct-run")
+            holder.acquire(wait=False)
+        try:
+            rows = acquire(self.lib, self.product, needed, wait=False, data_loader=str(fake), log=lambda m: None)
+        finally:
+            holder.release()
         self.assertEqual({r["outcome"] for r in rows}, {"skipped: account busy"})
         self.assertEqual(len(probe.read_text().splitlines()), 2)
 
@@ -433,3 +442,85 @@ class CompletenessTests(unittest.TestCase):
         self.assertTrue(_tile_manifest(m, "h003v004", ok_rows, Path("/x"), source_unfinished_elsewhere=True)[0]
                         ["dataset"]["complete"])
         self.assertFalse(_tile_manifest(m, "h003v004", ok_rows, Path("/x"))[0]["dataset"]["complete"])
+
+
+@unittest.skipUnless(HAVE_GEO, "needs the library extra (geopandas, pyarrow)")
+class PermissionsSupersededBackupTests(unittest.TestCase):
+    def setUp(self):
+        import grp
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.group = grp.getgrgid(os.getgid()).gr_name
+        self.lib = init_library(Path(self.tmp.name) / "lib", name="t", description="t", maintainers=["m"],
+                                group=self.group)
+        sp = Path(self.tmp.name) / "spec.yaml"
+        sp.write_text(yaml.safe_dump(PRODUCT))
+        self.product = add_product(self.lib, sp)
+
+    def _mode(self, p):
+        import stat
+        return stat.S_IMODE(p.stat().st_mode)
+
+    def test_policy_is_applied_after_import_and_after_a_dataloader_run(self):
+        src = _archive(Path(self.tmp.name) / "src")
+        import_archive(self.lib, self.product, src, mode="copy", log=lambda m: None)
+        d = self.product.tile_path("usgs_ard_conus", "h003v004")
+        tif = next(d.rglob("*.tif"))
+        self.assertEqual(self._mode(tif), 0o444)
+        self.assertEqual(self._mode(d / "manifest.json"), 0o644)
+        self.assertEqual(self._mode(d), 0o2775)
+        self.assertEqual(self._mode(self.lib.root / "LIBRARY.yaml"), 0o644)
+        if os.geteuid() != 0:
+            with self.assertRaises(PermissionError):
+                open(tif, "r+b")  # nobody edits imagery in place, not even its owner
+        # a DataLoader update into the sealed tile still works (temp file + rename)
+        cfg = self.product.config_for_tile("h003v004", "usgs_ard_conus")
+        cfg["time"]["end_date"] = "2023-08-31"
+        run_with(_provider(july(3) + [FakeScene(id="scene-aug", date=date(2023, 8, 2))]), config_from_dict(cfg))
+        from imagery_library.permissions import apply
+        before = apply(self.lib, fix=False)
+        self.assertTrue([p for p in before.problems if p])  # new files arrive with the umask, .state too
+        apply(self.lib)
+        after = apply(self.lib, fix=False)
+        self.assertEqual(after.problems, [])
+        self.assertEqual(self._mode(d / ".state"), 0o2770)
+        self.assertEqual(self._mode(d / ".state" / "lock"), 0o660)
+        self.assertEqual(open_dataset(d).verify(), [])
+
+    def test_bad_policies_are_refused(self):
+        from imagery_library.permissions import Policy
+        for bad in ({"imagery": "0666"}, {"dirs": "2777"}, {"group": "no-such-group-xyz"}, {"owner": "x"}):
+            self.lib.info["permissions"] = bad
+            with self.subTest(bad=bad), self.assertRaises(LibraryError):
+                Policy.from_library(self.lib)
+
+    def test_superseded_versions_in_catalog_and_backup_tiers(self):
+        from tests.test_superseded import NEW, OLD, OTHER, VersionedProvider, _scenes
+        src = Path(self.tmp.name) / "src"
+        cfg = make_config(src, aoi={"upper_left": None, "lower_right": None, "tiles": ["h003v004"]},
+                          grid={"resolution_m": None}, output=OUTPUT, workers=1)
+        run_with(VersionedProvider(_scenes(OLD, OTHER)), cfg)          # old version acquired first
+        run_with(VersionedProvider(_scenes(OLD, NEW, OTHER)), cfg)     # then a newer one appears
+        import_archive(self.lib, self.product, src, log=lambda m: None)
+        build_catalog(self.lib, log=lambda m: None)
+        import geopandas as gpd
+        import pandas as pd
+        from imagery_library.catalog import current_catalog
+        t = gpd.read_parquet(current_catalog(self.lib) / "tiles.parquet").set_index("tile")
+        o = pd.read_parquet(current_catalog(self.lib) / "observations.parquet").set_index("item_id")
+        self.assertEqual(t.loc["h003v004", "acquisition_state"], "complete")
+        self.assertEqual(t.loc["h003v004", "retired_versions_held"], 1)
+        self.assertEqual(o.loc[OLD, "superseded_by"], NEW)
+        from imagery_library.backup import backup_list
+        irr = list(backup_list(self.lib, "irreplaceable"))
+        img = list(backup_list(self.lib, "imagery"))
+        meta = list(backup_list(self.lib, "metadata"))
+        self.assertTrue(any(OLD in p and p.endswith(".tif") for p in irr))
+        self.assertFalse(any(OLD in p for p in img))
+        self.assertEqual(sum(p.endswith(".tif") for p in img), 2)
+        self.assertIn("LIBRARY.yaml", meta)
+        self.assertTrue(any(p.endswith("/items.jsonl") for p in meta))
+        self.assertTrue(any("/catalog/" in "/" + p and p.endswith("tiles.parquet") for p in meta))
+        self.assertFalse(any(p.endswith(".tif") for p in meta))
+        for p in meta + irr + img:
+            self.assertTrue((self.lib.root / p).is_file(), p)

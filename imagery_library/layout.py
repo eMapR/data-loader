@@ -38,7 +38,7 @@ _TILE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-]*")  # tile ids: h003v004, AK_h
 
 # PRODUCT.yaml keys that describe a product without changing what is acquired
 _DESCRIPTIVE = {"title", "description", "notes", "published_tiles"}
-_LIBRARY_KEYS = {"name", "description", "layout_version", "maintainers", "contact", "storage"}
+_LIBRARY_KEYS = {"name", "description", "layout_version", "maintainers", "contact", "storage", "permissions"}
 _PRODUCT_KEYS = {"product", "version", "title", "description", "grid_systems", "acquisition", "notes",
                  "published_tiles"}
 
@@ -299,7 +299,8 @@ def open_library(root) -> Library:
     return Library(root)
 
 
-def init_library(root, *, name: str, description: str, maintainers: list, contact: Optional[str] = None) -> Library:
+def init_library(root, *, name: str, description: str, maintainers: list, contact: Optional[str] = None,
+                 group: Optional[str] = None) -> Library:
     root = Path(root)
     if (root / LIBRARY_FILE).exists():
         raise LibraryError(f"{root}: already a library")
@@ -310,8 +311,14 @@ def init_library(root, *, name: str, description: str, maintainers: list, contac
             "maintainers": list(maintainers)}
     if contact:
         info["contact"] = contact
+    if group:
+        info["permissions"] = {"group": group}
     atomic_write(root / LIBRARY_FILE, yaml.safe_dump(info, sort_keys=False))
-    return Library(root)
+    lib = Library(root)
+    from imagery_library.permissions import apply_quietly
+
+    apply_quietly(lib, [root])
+    return lib
 
 
 def add_product(lib: Library, spec_path) -> Product:
@@ -341,4 +348,7 @@ def add_product(lib: Library, spec_path) -> Product:
     if extra is not None:
         atomic_write(root / p.published_tiles_file, extra.read_text())
     atomic_write(root / PRODUCT_FILE, Path(spec_path).read_text())
+    from imagery_library.permissions import apply_quietly
+
+    apply_quietly(lib, [root.parent, root / PRODUCT_FILE] + ([root / p.published_tiles_file] if extra else []))
     return p
