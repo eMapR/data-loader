@@ -32,6 +32,7 @@ engine internals. Projects hold no imagery and no acquisition settings.
   products/
     landsat_ard_sr/c2/                          product / version
       PRODUCT.yaml                              the product spec (copy of library/products/... in the repo)
+      published_tiles.json                      tiles USGS publishes, per grid (ocean/foreign positions are not)
       usgs_ard_conus/h003v004/                  grid system / tile = one ordinary DataLoader dataset
         manifest.json  items.jsonl  request.yaml  metadata/  landsat/h003v004/<year>/*.tif
         LINEAGE.json                            only for tiles imported from an older archive
@@ -43,7 +44,11 @@ engine internals. Projects hold no imagery and no acquisition settings.
                           catalog.json          build summary (counts, problems, builder commit)
   admin/
     imports.jsonl                               every import (what, from where, by which code)
+    acquisitions.jsonl                          every `imagery-library acquire` run (tile, outcome, time)
     verification.jsonl                          every verify (tile, time, ok, files, checksums)
+    verified/<tile path>.json                   exactly which observations the last verify covered
+    locks/<provider>.lock                       one acquisition per source account at a time
+    configs/, logs/                             generated per-tile DataLoader configs and their run logs
 ```
 
 A tile directory is exactly what `data-loader run` writes for a config
@@ -71,6 +76,26 @@ its own grid system (e.g. `mgrs`). Footprints come from each manifest's
 own grid record, so the catalog and queries work unchanged; only naming
 *missing* tiles needs a small grid helper in `imagery_library/grids.py`
 (and DataLoader needs tile-mode support for that provider).
+
+### Grids and missing tiles
+
+USGS ARD has three regional grids (CONUS, Alaska, Hawaii), each numbered
+from h000v000, so the same h/v is a different place on each; tile ids are
+region-qualified (`AK_h016v005`; bare = CONUS) and every spelling resolves
+to one canonical id and one directory (`CU_h003v004` -> `h003v004`).
+Measured 2026-10-26 (`bench/ard_grid_overlap.py`,
+`bench/ard_published_tiles.py`): within the h/v ranges USGS publishes, the
+grids do not overlap on the ground (closest published CONUS and Alaska
+tiles are 2.65° apart), so an AOI is never offered the same ground on two
+grids. But only 547 of 726 CONUS, 218 of 364 Alaska and 14 of 15 Hawaii
+grid positions have data (the rest are ocean or outside the US), and areas
+such as central British Columbia lie on no grid. Queries therefore report
+three things separately: tiles the library holds, tiles USGS publishes that
+the library lacks (**missing**: ask a maintainer), and the share of the AOI
+**outside the product** (nothing to acquire). The published list lives
+with the product (`published_tiles.json`); re-run the bench script when
+USGS adds tiles. Three Aleutian tiles cross ±180°; their footprints are
+split into two polygons.
 
 ## Finding imagery (researchers)
 
@@ -112,7 +137,28 @@ AOI covered by library tiles: 100.0%
 ```
 
 `imagery-library tiles ROOT` lists every tile with observation counts,
-date range, completeness and last verification. Each GeoTIFF's band
+date range and both states.
+
+### Tile and observation states
+
+Every tile in a query result (and the catalog) has two states:
+
+| acquisition | meaning |
+|---|---|
+| `complete` | everything USGS has published (as of `discovered_through`) is acquired |
+| `incomplete` | some observations failed or are pending (`failed_example` says why) |
+| `updating` | a DataLoader run is writing the tile right now; newest observations appear after the next catalog build |
+
+| verification | meaning |
+|---|---|
+| `verified` | the last checksum verify passed and covered every observation |
+| `partially_verified` | it passed, but observations were added since (they are `verified = False`) |
+| `failed` | the last verify found missing or corrupt files |
+| `unverified` | never verified with checksums (or imagery not present on this storage) |
+
+Each observation has `verified` (True only if the last passing checksum
+verify checked that exact row version). `verified_only=True` (query file:
+`verified_only: true`) returns only those, and says how many it left out. Each GeoTIFF's band
 order, scale/offset, nodata and QA meaning are in its tile's
 `manifest.json` (`bandSets`), as for any DataLoader dataset.
 
@@ -123,26 +169,47 @@ imagery-library init ROOT --name ... --description ... --maintainer ...
 imagery-library add-product ROOT library/products/landsat_ard_sr/c2/PRODUCT.yaml
 
 # a project needs an AOI: which tiles, which are already held?
-imagery-library acquire-config ROOT --aoi aois/usfs_r10_tanana_river.geojson --out-dir cfgs/
-# -> one DataLoader config per tile the library lacks (held tiles are listed, not re-acquired)
-data-loader run cfgs/landsat_ard_sr_c2_usgs_ard_alaska_AK_h016v005.yaml   # one tile at a time, in tmux
+imagery-library acquire-config ROOT --aoi aois/usfs_r10_tanana_river.geojson
+# acquire the missing ones, one tile at a time, queued behind any other run on the account (run in tmux)
+imagery-library acquire ROOT --aoi aois/usfs_r10_tanana_river.geojson
+# updates (newly published observations) for held tiles
+imagery-library acquire ROOT --tile AK_h016v005 --include-held
 
-# updates: re-run a held tile's config (--include-held writes those too)
-imagery-library verify ROOT [--tile T]      # DataLoader verify per tile, logged to admin/verification.jsonl
+imagery-library verify ROOT [--tile T]      # DataLoader verify per tile (skips tiles being written)
 imagery-library catalog ROOT                # rebuild after runs / verifies
 ```
 
-Rules: one DataLoader run per USGS M2M account at a time; one writer per
-tile (DataLoader's lock enforces it); rebuild the catalog after each run.
+### Concurrency: what is guaranteed
 
-### Concurrent access
+- **No duplicate tiles.** A tile has exactly one directory (product /
+  version / grid / canonical id). `acquire` and `acquire-config` list tiles
+  already held instead of acquiring them, and the importer refuses a tile
+  that exists with different content.
+- **One writer per tile.** DataLoader holds an exclusive lock on the tile
+  directory for the whole run; a second run on the same tile (from any
+  maintainer or machine) is refused at once.
+- **One acquisition per USGS account.** `acquire` holds
+  `admin/locks/<provider>.lock` around each run, so requests queue (or,
+  with `--no-wait`, are skipped and reported). Locks are `flock`; on NFSv4
+  they are held on the server, so they work across machines.
+- **Readers never see partial state.** DataLoader writes each GeoTIFF to a
+  temp name, fsyncs, renames, and only then records it; the catalog is built
+  into a new directory and `catalog/current` is switched with one atomic
+  rename; a query resolves `current` once and reads only that build. Old
+  builds are kept for at least an hour (the current one always).
+- **Catalog builds during acquisitions are consistent.** One build at a
+  time (`catalog/.build.lock`). A tile being written is read journal first,
+  then items.jsonl, keeping the newer row per observation, so a snapshot
+  DataLoader writes in between cannot drop rows; the tile is marked
+  `updating`.
+- **Verify skips tiles being written** and records exactly which
+  observations it checked, so states never depend on clock comparisons.
 
-Researchers read through `catalog/current`, which switches atomically to
-a complete new build, and DataLoader writes each GeoTIFF to a temp file
-renamed into place only after fsync. A researcher therefore never sees a
-partial file or a half-written catalog; a tile being updated simply shows
-its new observations after the next catalog build. The catalog records
-`run_in_progress` per tile.
+Validated on real data 2026-10-26 (development report): a second acquire
+request for the same tile was skipped (account busy), a direct
+`data-loader run` on it was refused (tile locked), verify skipped it, and a
+catalog build and query during the run showed it as `updating` with its
+first observations `unverified`.
 
 ## Migrating existing archives
 

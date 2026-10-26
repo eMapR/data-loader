@@ -535,6 +535,45 @@ Validated without touching production:
 Storage findings and the questions for the storage administrators are in
 docs/library-storage-requirements.md. Production is not migrated.
 
+Pre-migration review (same day) found and fixed:
+
+- **Grids:** within USGS's published h/v ranges the CONUS and Alaska grids
+  do not overlap (closest published tiles 2.65° apart), so duplicate
+  suggestions across grids cannot occur; but only 547/726 CONUS, 218/364
+  Alaska and 14/15 Hawaii positions are published, and the POC would have
+  called ocean or Canadian positions "missing". Products now carry
+  `published_tiles.json` (one STAC search per position, 23 s); queries
+  separate missing tiles from AOI area outside the product (central BC:
+  100% outside, nothing missing). Aleutian tiles across ±180° get split
+  footprints.
+- **Duplicate tiles:** `CU_h003v004` and `h003v004` would have become two
+  directories; tile ids are now canonicalised before any path is built.
+- **Concurrency:** catalog builds are serialised by a lock; pruning never
+  removes the build `current` points to and keeps others for an hour; a
+  tile being written is read journal-then-items with the newer row kept
+  (a snapshot written mid-read could drop rows). `imagery-library acquire`
+  queues runs behind a library-wide per-account lock.
+- **Completeness:** the importer copied a source archive's "incomplete"
+  flag to every tile; Oregon's single superseded row made all 23 Oregon
+  tiles look incomplete. Now per tile: 33 complete, 3 incomplete (the three
+  known superseded-version rows, each with its error in the catalog).
+- **Verification:** "verified after a timestamp" was wrong at one-second
+  resolution (a file written in the same second as a verify started counted
+  as verified). Each verify now records exactly which observation versions
+  it checked; tiles report acquisition (complete / incomplete / updating)
+  and verification (verified / partially_verified / failed / unverified)
+  states, observations a `verified` flag, and queries can ask for
+  `verified_only`.
+
+Real-data concurrency check: while `imagery-library acquire` downloaded a
+new tile (AK_h021v008, 32 observations, 172 s), a second acquire request
+was skipped (account busy), a direct `data-loader run` on the tile was
+refused (tile locked), verify skipped it, and a catalog build and query
+showed it `updating` with 5 `unverified` observations; afterwards it
+verified and all 94 test observations were `verified`. Production metadata
+re-imported (metadata-only) into a new shadow library: 36 tiles, 134,766
+observations, sources unchanged.
+
 ## Scaling limitations identified
 
 **Fundamental / external (not something DataLoader controls):**

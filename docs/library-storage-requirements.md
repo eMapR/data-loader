@@ -15,7 +15,7 @@ moved; production archives are untouched.
 | Observations | 134,766 | ~180,000 |
 | Size | 12.46 TB (11.4 TiB) | ~16.6 TB + ~0.9 TB/yr new observations |
 | Files | 269,532 (one GeoTIFF + one source-metadata JSON per observation) | ~360,000 |
-| File sizes | GeoTIFF mean 92 MB (up to ~110 MB); JSON a few KB | same |
+| File sizes | GeoTIFF mean 92 MB (up to ~110 MB); JSON ~35 KB | same |
 | Directory fan-out | one directory per tile per year (~37 per tile), ≤ ~600 files each | same |
 
 Growth: USGS keeps publishing Landsat 8/9 observations, measured at a median
@@ -27,28 +27,84 @@ session per account), ~20-25 MB/s sustained for days, each file written to
 a temp name, fsynced, then renamed. Read pattern: researchers read whole
 GeoTIFFs, often a whole tile history (~350 GB) for time-series work.
 
-## What the library needs from storage
+## Permissions
 
-1. **A directory we own as a group**, e.g. `<volume>/imagery_library/`,
-   owned by a maintainers group, with researchers able to read but not write.
-2. **Read-only for researchers, writable for maintainers.** Proposed:
-   directories `2775` (setgid) and files `0444` after acquisition, group =
-   maintainers (2-3 people); researchers read via `other` or a readers
-   group. Today on `/vol/v1/data` every file is `664` and every directory is
-   group-writable with a default ACL, so all 13 members of `trenders` can
-   modify or delete production imagery.
-3. **Quota** of at least 20 TB to start, with room to grow by ~1 TB/yr plus
+### Roles
+
+| Role | Who | Needs |
+|---|---|---|
+| Maintainers | 2-3 named people (eMapR) | create/update tile datasets, run verify, rebuild the catalog, write `admin/` |
+| Researchers | eMapR and other OSU researchers with an account on the compute hosts | read imagery, manifests and the catalog; nothing else |
+| Acquisition credentials | USGS M2M token(s) | held only in maintainers' environment (`~/.config/data-loader/*.env`, mode 600); never stored in the library, its logs or its configs |
+
+### Proposed layout of permissions
+
+| Path | Owner : group | Mode | Why |
+|---|---|---|---|
+| `<root>/` and every directory below it | maintainer (or a service account) : `imglib-maint` | `2775` (setgid) | maintainers create/rename files (DataLoader writes a temp file and renames it); others can list and read but not create, rename or delete |
+| GeoTIFFs and `metadata/*.json` once acquired | same | `0444` | nobody overwrites imagery in place; a maintainer can still replace a damaged file (rename needs only the directory's write bit) |
+| `manifest.json`, `items.jsonl`, `request.yaml`, `LINEAGE.json`, `PRODUCT.yaml` | same | `0644` | rewritten atomically by maintainers' tools |
+| `catalog/` | same | `2775` / `0644` | researchers read `catalog/current/*`; only maintainers rebuild |
+| `admin/` (logs, locks, verify records, generated configs) | same | `2770` / `0660` | maintainers only; locks must be writable by every maintainer |
+| `.state/` in each tile (DataLoader lock + journal) | same | `2770` | written by a running acquisition only |
+
+Researchers read via `other` (`r-x` / `r--`) or, if access must be limited
+to OSU accounts in particular groups, a readers group through an ACL; the
+library needs no per-project access control because all imagery is the same
+public USGS product.
+
+Today, on `/vol/v1/data`, every file is `664` and every directory is
+group-writable with a default ACL (`group::rwx`), so all 13 members of
+`trenders` can modify or delete production imagery. That does not meet the
+read-only requirement; we'd like to tighten it (or move to a volume where we
+can) as part of the migration.
+
+Maintainers must run acquisitions through `imagery-library acquire`, which
+takes the library-wide account lock in `admin/locks/`; a plain
+`data-loader run` on a tile still cannot corrupt it (DataLoader locks the
+tile directory) but does not queue behind other accounts' runs.
+
+## Backup and recovery
+
+### What to back up
+
+| Tier | Content | Size now | Recoverable without backup? | Requirement |
+|---|---|---|---|---|
+| 1. Metadata | `LIBRARY.yaml`, `PRODUCT.yaml`, `published_tiles.json`, every tile's `manifest.json` / `items.jsonl` / `request.yaml` / `LINEAGE.json` / `metadata/` (USGS source records), `admin/`, `catalog/current/` | **~5.0 GB** (4.75 GB source records, 0.28 GB manifests + items, ~20 MB catalog) | No: provenance, checksums and acquisition history exist only here | **must** be backed up: daily, or after each acquisition |
+| 2. Irreplaceable imagery | observations whose USGS processing version has since been replaced (USGS removes the old version; we have hit this twice) | unknown, grows over time | **No**: cannot be downloaded again | **should** be backed up or snapshotted |
+| 3. Other imagery | everything else | ~12.5 TB | yes, by re-running DataLoader: about 1.4 TB per day of exclusive use of one USGS account (≈ 9 days for today's library) | snapshot or replicate if the volume allows; otherwise accept the re-download time |
+
+Exclude `.state/` (run bookkeeping) and old catalog builds
+(`catalog/2*/` other than the one `current` points to).
+
+During a migration by hard links the old project-named paths and the new
+library paths share the same files. A backup that does not preserve hard
+links (for example `rsync` without `-H`) would store everything twice
+(~25 TB instead of ~12.5 TB).
+
+### Recovery
+
+- **Lost or damaged imagery:** `imagery-library verify` (sha256 of every
+  file against the manifest) finds it; re-running the tile's acquisition
+  downloads exactly the missing or damaged observations again (DataLoader
+  treats a missing or wrong-size file as not acquired). Retired processing
+  versions fail at this step; that is the reason for tier 2.
+- **Lost metadata with intact imagery:** without tier 1 the files cannot be
+  verified or attributed; the tile would have to be re-acquired. Hence "must".
+- **Catalog:** never needs restoring; `imagery-library catalog` rebuilds it
+  from the tiles in about 12 s for the current library.
+
+## Other storage requirements
+
+1. **A directory we own as a group**, e.g. `<volume>/imagery_library/`.
+2. **Quota** of at least 20 TB to start, with room to grow by ~1 TB/yr plus
    new study areas (each ~0.3-4 TB).
-4. **Backup or snapshots.** At minimum the metadata (manifests, items,
-   source metadata JSON, catalog, admin logs: under 10 GB total) must be
-   backed up. Ideally imagery too: it can mostly be downloaded again (days of
-   USGS time per region), but USGS retires old processing versions when it
-   reprocesses (we have already hit this twice), so some acquired files can
-   no longer be re-downloaded and exist only here.
-5. **POSIX semantics DataLoader relies on:** atomic `rename`, `fsync`,
-   `flock` (one writer per tile), hard links within the volume (for a
-   zero-copy migration), symlinks (the catalog's `current` pointer).
-6. **Throughput** good enough for time-series reads from the machines
+3. **POSIX semantics the library relies on:** atomic `rename` (files and the
+   catalog switch), `fsync`, `flock` (one writer per tile; one acquisition
+   per USGS account across machines: NFSv4 must pass locks to the server,
+   i.e. not `local_lock=all`), hard links within the volume (zero-copy
+   migration), symlinks (`catalog/current`).
+4. **Throughput** good enough for time-series reads from the machines
    researchers compute on; at 1 Gb/s a single tile history takes ~1 h to read.
 
 ## Candidate volumes (measured 2026-10-26 from this server)
@@ -80,19 +136,21 @@ may still be preferable.
 1. May eMapR create a shared Landsat (later Sentinel-2) library under
    `/home/server/datasets`, ~17 TB in the first year and growing?
 2. What quota applies, and how do we request more?
-3. Is the volume backed up or snapshotted? If not, can a small metadata
-   directory (<10 GB) be included in a backed-up location?
-4. What disks/filesystem are behind `datasets:/data/datasets`, and does it
-   support hard links, `flock` and atomic rename over NFS 4.2 as we use them?
-5. Can the library directory be owned by a maintainers group (2-3 people)
-   with read-only access for other researchers (a readers group, or
-   `other`)? Can OSU researchers outside our groups get read access?
+3. Is the volume backed up or snapshotted? If not, can the ~5 GB of
+   metadata (tier 1) be included in a backed-up location, and is there an
+   option for the imagery (tiers 2-3)?
+4. What disks/filesystem are behind `datasets:/data/datasets`, and do hard
+   links, `flock` across clients and atomic rename work as described above
+   over NFS 4.2?
+5. Can the library directory be owned by a maintainers group (2-3 people,
+   or a service account) with read-only access for other researchers? Can
+   OSU researchers outside our groups get read access?
 6. Is the `soft` mount intentional for a volume we would write to for days?
 7. Do the compute nodes researchers use have a faster path to it than this
    server's 1 Gb/s link?
 8. Was `testing/` a throughput benchmark, and are its results available?
 9. If `/vol/v1` stays in use for now: is it backed up, and can we tighten
-   its permissions (see requirement 2) without affecting other users?
+   its permissions as above without affecting other users?
 
 ## What we will do once these are answered
 

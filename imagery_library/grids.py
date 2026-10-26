@@ -32,7 +32,22 @@ def footprint_lonlat(grid: dict, n: int = 21) -> Polygon:
     xs, ys = a * cols + b * rows + c, d * cols + e * rows + f
     crs = CRS.from_wkt(grid["crsWkt"]) if grid.get("crsWkt") else CRS.from_user_input(grid["epsg"])
     lons, lats = Transformer.from_crs(crs, "EPSG:4326", always_xy=True).transform(xs, ys)
-    return Polygon(zip(lons, lats))
+    return _split_antimeridian(np.asarray(lons), np.asarray(lats))
+
+
+def _split_antimeridian(lons, lats):
+    """A ring that crosses +/-180 (westernmost Aleutian tiles) becomes two
+    polygons, one each side, instead of one spanning the whole globe."""
+    if lons.max() - lons.min() <= 180:
+        return Polygon(zip(lons, lats))
+    from shapely.affinity import translate
+    from shapely.geometry import MultiPolygon
+
+    ring = Polygon(zip(np.where(lons < 0, lons + 360, lons), lats))
+    east = ring.intersection(box(0, -90, 180, 90))
+    west = translate(ring.intersection(box(180, -90, 360, 90)), xoff=-360)
+    parts = [g for g in (east, west) if not g.is_empty]
+    return MultiPolygon([p for g in parts for p in getattr(g, "geoms", [g])])
 
 
 def to_equal_area(geom):
@@ -81,16 +96,17 @@ def tiles_for_aoi(system: str, aoi_lonlat) -> Optional[list[dict]]:
     return sorted(out, key=lambda x: -x["aoi_share"])
 
 
-def grid_system_of(tile: str, systems: list) -> str:
-    """Which of a product's grid systems a tile id belongs to."""
+def grid_system_of(tile: str, systems: list) -> tuple[str, str]:
+    """(grid system, canonical tile id) for a tile id, among a product's grid systems."""
     from data_loader.tiles import UsgsArdGrid
 
+    grid = UsgsArdGrid()
     try:
-        system = UsgsArdGrid().region(tile).system
+        system, canonical = grid.region(tile).system, grid.canonical(tile)
     except ValueError:
-        system = None
+        system, canonical = None, tile
     if system in systems:
-        return system
+        return system, canonical
     if len(systems) == 1 and system is None:
-        return systems[0]
+        return systems[0], canonical
     raise ValueError(f"tile {tile!r}: not on any of this product's grids ({', '.join(systems)})")

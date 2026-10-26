@@ -9,6 +9,7 @@ Maintainers:
     imagery-library add-product ROOT SPEC.yaml  install a product spec (PRODUCT.yaml)
     imagery-library import ROOT ARCHIVE         split a project archive into library tiles (source untouched)
     imagery-library acquire-config ROOT ...     DataLoader configs for tiles an AOI needs and the library lacks
+    imagery-library acquire ROOT ...            run those tiles one at a time, queued per source account
     imagery-library verify ROOT                 DataLoader verify on every tile, logged for the catalog
     imagery-library catalog ROOT                rebuild the catalog
 
@@ -25,7 +26,7 @@ import yaml
 from imagery_library.layout import LibraryError, add_product, init_library, open_library
 
 _QUERY_KEYS = {"aoi", "start", "end", "product", "version", "platforms", "max_cloud_percent",
-               "min_valid_fraction", "months"}
+               "min_valid_fraction", "months", "verified_only"}
 
 
 def cmd_init(a) -> int:
@@ -73,11 +74,24 @@ def cmd_acquire_config(a) -> int:
     return 0
 
 
+def cmd_acquire(a) -> int:
+    from imagery_library.acquire import acquire, tiles_needed
+
+    lib = open_library(a.root)
+    product = lib.product(a.product, a.version)
+    needed = tiles_needed(lib, product, aoi=a.aoi, tiles=a.tile)
+    todo = [r for r in needed if a.include_held or not r["held"]]
+    print(f"{product.key}: {len(needed)} tile(s) needed, {len(todo)} to run"
+          + ("" if a.include_held else f" ({len(needed) - len(todo)} already held; --include-held updates them)"))
+    rows = acquire(lib, product, needed, include_held=a.include_held, wait=not a.no_wait)
+    return 0 if all(r.get("exit") == 0 for r in rows) else 3
+
+
 def cmd_verify(a) -> int:
     from imagery_library.catalog import verify_tiles
 
     rows = verify_tiles(open_library(a.root), product=a.product, tiles=a.tile, checksums=not a.no_checksums)
-    return 4 if any(not r["ok"] for r in rows) else 0
+    return 4 if any(r["ok"] is False for r in rows) else 0
 
 
 def cmd_catalog(a) -> int:
@@ -94,12 +108,14 @@ def cmd_tiles(a) -> int:
 
     lib = open_library(a.root)
     t = gpd.read_parquet(current_catalog(lib) / "tiles.parquet")
-    print(f"{'product':<26} {'grid/tile':<28} {'obs':>7} {'first':>11} {'last':>11} {'TB':>7}  complete verified")
+    print(f"{'product':<26} {'grid/tile':<28} {'obs':>7} {'verified':>8} {'first':>11} {'last':>11} {'TB':>7}  "
+          f"{'acquisition':<11} verification")
     for r in t.sort_values(["product", "version", "grid_system", "tile"]).itertuples():
-        ver = "-" if r.verify_ok is None else ("OK " if r.verify_ok else "BAD") + f" {str(r.last_verified)[:10]}"
+        acq = r.acquisition_state + (f" ({r.failed} failed)" if r.failed else "")
+        ver = r.verification_state + (f" {str(r.last_verified)[:10]}" if r.last_verified else "")
         print(f"{r.product + '/' + r.version:<26} {r.grid_system + '/' + r.tile:<28} {r.observations:>7} "
-              f"{str(r.first_date):>11} {str(r.last_date):>11} {r.bytes / 1e12:7.3f}  {str(r.complete):<8} {ver}"
-              + ("" if r.imagery_present else "  (metadata only)"))
+              f"{r.verified_observations:>8} {str(r.first_date):>11} {str(r.last_date):>11} {r.bytes / 1e12:7.3f}  "
+              f"{acq:<11} {ver}" + ("" if r.imagery_present else "  (metadata only)"))
     return 0
 
 
@@ -159,6 +175,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--out-dir", help="write configs here (default: just report)")
     sp.add_argument("--include-held", action="store_true", help="also write configs for held tiles (updates)")
     sp.set_defaults(fn=cmd_acquire_config)
+    sp = sub.add_parser("acquire", help="run DataLoader for an AOI's or the listed tiles, one at a time")
+    sp.add_argument("root")
+    sp.add_argument("--product")
+    sp.add_argument("--version")
+    sp.add_argument("--aoi", help="vector file")
+    sp.add_argument("--tile", action="append")
+    sp.add_argument("--include-held", action="store_true", help="also update tiles the library holds")
+    sp.add_argument("--no-wait", action="store_true", help="skip tiles instead of queueing if the account is busy")
+    sp.set_defaults(fn=cmd_acquire)
     sp = sub.add_parser("verify", help="verify tile datasets (logged for the catalog)")
     sp.add_argument("root")
     sp.add_argument("--product")

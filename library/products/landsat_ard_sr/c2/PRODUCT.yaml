@@ -14,6 +14,7 @@ description: >-
   QA_PIXEL, one GeoTIFF per observation. Source files are SHA-512 checked
   against the USGS STAC record before they are written.
 grid_systems: [usgs_ard_conus, usgs_ard_alaska, usgs_ard_hawaii]
+published_tiles: published_tiles.json   # tiles USGS publishes (bench/ard_published_tiles.py, 2026-10-26)
 acquisition:
   version: 1
   provider: usgs_ard

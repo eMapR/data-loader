@@ -127,7 +127,9 @@ def plan_import(lib: Library, product: Product, src, *, tiles: Optional[list] = 
     src_ident = spec_identity(request)
     plans = []
     for t in tile_ids:
-        system = grid_system_of(t, product.grid_systems)
+        system, canonical = grid_system_of(t, product.grid_systems)
+        if canonical != t:
+            raise LibraryError(f"{src}: tile {t!r} is not in canonical form ({canonical!r}); upgrade the archive")
         want = product.spec_identity(t, system)
         dest = product.tile_path(system, t)
         rows = rows_by_tile[t]
@@ -173,8 +175,12 @@ def plan_import(lib: Library, product: Product, src, *, tiles: Optional[list] = 
     return m, plans
 
 
-def _tile_manifest(m: dict, tile: str, rows: list, dest: Path) -> tuple[dict, dict]:
-    """The source manifest narrowed to one tile (same contract, same schema)."""
+def _tile_manifest(m: dict, tile: str, rows: list, dest: Path,
+                   source_unfinished_elsewhere: bool = False) -> tuple[dict, dict]:
+    """The source manifest narrowed to one tile (same contract, same schema).
+    A tile is complete when it has no failed/pending rows and the source was
+    complete, or the source was incomplete only because of other tiles'
+    failed/pending rows (its own completeness must not be inherited)."""
     out = copy.deepcopy(m)
     req = out.get("request", {})
     req.setdefault("aoi", {})["tiles"] = [tile]
@@ -189,7 +195,8 @@ def _tile_manifest(m: dict, tile: str, rows: list, dest: Path) -> tuple[dict, di
     cov.update({"counts": counts, "firstAcquired": dates[0] if dates else None,
                 "lastAcquired": dates[-1] if dates else None,
                 "bytes": sum(f.get("bytes", 0) for r in acquired for f in r.get("files", []))})
-    out["dataset"]["complete"] = counts["pending"] == 0 and counts["failed"] == 0 and m["dataset"].get("complete", False)
+    out["dataset"]["complete"] = counts["pending"] == 0 and counts["failed"] == 0 and (
+        m["dataset"].get("complete", False) or source_unfinished_elsewhere)
     out["items"] = "items.jsonl"
     return out, req
 
@@ -219,6 +226,8 @@ def import_archive(lib: Library, product: Product, src, *, mode: str = "hardlink
         result.source_unchanged = _source_fingerprint(src) == before
         return result
     sw = software()
+    all_rows = [r for tp in plans for r in tp.rows]  # (plans cover every tile unless --tile narrowed them)
+    unfinished_elsewhere = tiles is None and any(r.get("status") in ("failed", "pending") for r in all_rows)
     for tp in plans:
         if tp.action != "import":
             log(f"  {tp.tile}: {tp.action}" + (f" -- {tp.problems[0]}" if tp.problems else ""))
@@ -231,7 +240,8 @@ def import_archive(lib: Library, product: Product, src, *, mode: str = "hardlink
             if mode != "metadata":
                 for rel, _ in tp.files:
                     _place(src / rel, stage / rel, mode)
-            manifest, request = _tile_manifest(m, tp.tile, tp.rows, tp.dest)
+            manifest, request = _tile_manifest(m, tp.tile, tp.rows, tp.dest,
+                                               source_unfinished_elsewhere=unfinished_elsewhere)
             atomic_write(stage / "items.jsonl", "".join(json.dumps(r, default=str) + "\n" for r in tp.rows))
             atomic_write(stage / "manifest.json", json.dumps(manifest, indent=2, default=str) + "\n")
             atomic_write(stage / "request.yaml", yaml.safe_dump(request, sort_keys=False))

@@ -5,6 +5,7 @@ Network-free: archives are written by the real engine with the fake provider."""
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 import unittest
 from datetime import date
@@ -159,7 +160,8 @@ class ImportTests(unittest.TestCase):
         from imagery_library.catalog import current_catalog
         t = gpd.read_parquet(current_catalog(lib) / "tiles.parquet").set_index("tile")
         self.assertEqual(t.loc["h003v004", "failed"], 1)
-        self.assertFalse(t.loc["h003v004", "complete"])
+        self.assertEqual(t.loc["h003v004", "acquisition_state"], "incomplete")
+        self.assertIn("simulated failure", t.loc["h003v004", "failed_example"])
 
 
 @unittest.skipUnless(HAVE_GEO, "needs the library extra (geopandas, pyarrow)")
@@ -188,7 +190,9 @@ class CatalogQueryTests(unittest.TestCase):
         self.assertAlmostEqual(r.covered_share, 1.0, places=6)
         self.assertEqual(r.missing, [])
         self.assertTrue(all(p.exists() for p in r.paths()))
-        self.assertTrue(bool(r.tiles["verify_ok"].iloc[0]))
+        self.assertEqual(r.tiles["verification_state"].iloc[0], "verified")
+        self.assertEqual(r.tiles["acquisition_state"].iloc[0], "complete")
+        self.assertTrue(r.observations["verified"].all())
 
     def test_date_filter(self):
         r = self.lib.query(self._inside("h003v004"), start="2023-07-02", end="2023-07-02")
@@ -217,8 +221,10 @@ class CatalogQueryTests(unittest.TestCase):
         self.assertTrue(cfg.output.dir.startswith(str(self.lib.root)))
 
     def test_catalog_builds_swap_atomically_and_old_builds_are_pruned(self):
-        for _ in range(4):
-            build_catalog(self.lib, log=lambda m: None)
+        from unittest.mock import patch
+        with patch("imagery_library.catalog.BUILD_MIN_AGE_S", 0):
+            for _ in range(4):
+                build_catalog(self.lib, log=lambda m: None)
         cur = (self.lib.catalog_dir / "current")
         self.assertTrue(cur.is_symlink())
         builds = [p for p in self.lib.catalog_dir.iterdir() if p.is_dir() and not p.is_symlink()]
@@ -246,3 +252,184 @@ class CatalogQueryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(HAVE_GEO, "needs the library extra (geopandas, pyarrow)")
+class SafetyTests(unittest.TestCase):
+    """States, concurrency and grid edge cases (the pre-migration review)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.src = _archive(Path(self.tmp.name) / "project_archive")
+        self.lib = _library(Path(self.tmp.name) / "lib")
+        self.product = self.lib.product()
+        import_archive(self.lib, self.product, self.src, log=lambda m: None)
+        from data_loader.tiles import UsgsArdGrid
+        w, s, e, n = UsgsArdGrid().bbox_lonlat("h003v004")
+        self.inside = ((w + e) / 2 - 0.2, (s + n) / 2 - 0.2, (w + e) / 2 + 0.2, (s + n) / 2 + 0.2)
+
+    def _tiles(self):
+        import geopandas as gpd
+        from imagery_library.catalog import current_catalog
+        return gpd.read_parquet(current_catalog(self.lib) / "tiles.parquet").set_index("tile")
+
+    def _hold_tile_lock(self, tile):
+        """What a running `data-loader run` holds on its tile directory."""
+        import fcntl
+        lock = self.product.tile_path("usgs_ard_conus", tile) / ".state" / "lock"
+        lock.parent.mkdir(exist_ok=True)
+        f = open(lock, "w")
+        fcntl.flock(f, fcntl.LOCK_EX)
+        self.addCleanup(f.close)
+        return f
+
+    def test_verification_states_follow_new_observations(self):
+        build_catalog(self.lib, log=lambda m: None)
+        self.assertEqual(self._tiles().loc["h003v004", "verification_state"], "unverified")
+        verify_tiles(self.lib, log=lambda m: None)
+        build_catalog(self.lib, log=lambda m: None)
+        self.assertEqual(self._tiles().loc["h003v004", "verification_state"], "verified")
+        # an update adds one observation after the verify
+        cfg = self.product.config_for_tile("h003v004", "usgs_ard_conus")
+        cfg["time"]["end_date"] = "2023-08-31"
+        run_with(_provider(july(3) + [FakeScene(id="scene-aug", date=date(2023, 8, 2))]), config_from_dict(cfg),
+                 today=date(2099, 1, 1))
+        build_catalog(self.lib, log=lambda m: None)
+        t = self._tiles().loc["h003v004"]
+        self.assertEqual((t["verification_state"], t["observations"], t["verified_observations"]),
+                         ("partially_verified", 4, 3))
+        r = self.lib.query(self.inside)
+        self.assertEqual(int(r.observations["verified"].sum()), 3)
+        self.assertIn("1 not yet verified", r.summary())
+        rv = self.lib.query(self.inside, verified_only=True)
+        self.assertEqual((len(rv.observations), rv.excluded_unverified), (3, 1))
+
+    def test_sizes_only_verify_does_not_count_as_verified(self):
+        verify_tiles(self.lib, checksums=False, log=lambda m: None)
+        build_catalog(self.lib, log=lambda m: None)
+        self.assertEqual(self._tiles().loc["h003v004", "verification_state"], "unverified")
+
+    def test_tile_being_written_is_marked_updating_and_not_verified(self):
+        self._hold_tile_lock("h003v004")
+        res = verify_tiles(self.lib, log=lambda m: None)
+        self.assertEqual({r["tile"]: r["ok"] for r in res}, {"h003v004": None, "h003v005": True})
+        build_catalog(self.lib, log=lambda m: None)
+        t = self._tiles()
+        self.assertEqual(t.loc["h003v004", "acquisition_state"], "updating")
+        self.assertEqual(t.loc["h003v005", "acquisition_state"], "complete")
+        self.assertIn("updating", self.lib.query(self.inside).summary())
+
+    def test_rows_read_mid_snapshot_are_not_lost(self):
+        from imagery_library.catalog import tile_rows
+        d = self.product.tile_path("usgs_ard_conus", "h003v004")
+        m = json.loads((d / "manifest.json").read_text())
+        rows = read_items(d)
+        newer = dict(rows[0], status="acquired", updated="2099-01-01T00:00:00+00:00", note="newer")
+        only_journal = dict(rows[0], key="landsat/h003v004/scene-new", updated="2099-01-01T00:00:00+00:00")
+        (d / ".state").mkdir(exist_ok=True)
+        (d / ".state" / "journal.jsonl").write_text(json.dumps(newer) + "\n" + json.dumps(only_journal) + "\n{\"cut")
+        got = {r["key"]: r for r in tile_rows(d, m)}
+        self.assertEqual(len(got), 4)
+        self.assertEqual(got[rows[0]["key"]].get("note"), "newer")
+
+    def test_one_catalog_build_at_a_time(self):
+        import fcntl
+        self.lib.catalog_dir.mkdir(exist_ok=True)
+        with open(self.lib.catalog_dir / ".build.lock", "w") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            with self.assertRaisesRegex(LibraryError, "another catalog build"):
+                build_catalog(self.lib, log=lambda m: None)
+        build_catalog(self.lib, log=lambda m: None)  # fine once released
+
+    def test_current_build_is_never_pruned(self):
+        from unittest.mock import patch
+        from imagery_library.catalog import _prune, current_catalog
+        with patch("imagery_library.catalog.BUILD_MIN_AGE_S", 0):
+            for _ in range(5):
+                build_catalog(self.lib, log=lambda m: None)
+            first = sorted(p for p in self.lib.catalog_dir.iterdir() if p.is_dir() and not p.is_symlink())[0]
+            _prune(self.lib, first.resolve())  # e.g. a slower build that finished last points `current` at it
+            self.assertTrue(first.exists())
+        self.assertTrue((current_catalog(self.lib) / "tiles.parquet").exists())
+
+    def test_tile_spellings_resolve_to_one_directory(self):
+        needed = tiles_needed(self.lib, self.product, tiles=["CU_h003v004", "h003v004", "AK_h020v008"])
+        self.assertEqual([(r["grid_system"], r["tile"], r["held"]) for r in needed],
+                         [("usgs_ard_conus", "h003v004", True), ("usgs_ard_alaska", "AK_h020v008", False)])
+
+    def test_unpublished_grid_positions_are_not_missing(self):
+        spec = json.loads(json.dumps(PRODUCT))
+        spec["version"] = "c2-pub"
+        spec["published_tiles"] = "published.json"
+        d = Path(self.tmp.name) / "specdir"
+        d.mkdir()
+        (d / "published.json").write_text(json.dumps(
+            {"tiles": {"usgs_ard_conus": ["h003v004", "h003v005"], "usgs_ard_alaska": []}}))
+        (d / "PRODUCT.yaml").write_text(yaml.safe_dump(spec))
+        prod = add_product(self.lib, d / "PRODUCT.yaml")
+        import_archive(self.lib, prod, self.src, log=lambda m: None)
+        build_catalog(self.lib, log=lambda m: None)
+        from data_loader.tiles import UsgsArdGrid
+        g = UsgsArdGrid()
+        w, s, _, _ = g.bbox_lonlat("h003v005")
+        _, _, e, n = g.bbox_lonlat("h004v005")  # h004v005 is "not published" in this product
+        r = self.lib.query((w + 0.3, s + 0.3, e - 0.3, n - 0.3), version="c2-pub")
+        self.assertEqual(r.missing, [])
+        self.assertLess(r.published_share, 0.9)
+        self.assertIn("outside the product", r.summary())
+        with self.assertRaisesRegex(LibraryError, "publishes no data"):
+            tiles_needed(self.lib, prod, tiles=["h004v005"])
+
+    def test_antimeridian_tile_footprint_is_split(self):
+        from data_loader.tiles import ARD_REGIONS, UsgsArdGrid
+        from imagery_library.grids import footprint_lonlat
+        g = UsgsArdGrid()
+        tile = next(f"AK_h{h:03d}v{v:03d}" for h in range(3) for v in range(14)
+                    if (lambda b: b[2] - b[0] >= 359)(g.bbox_lonlat(f"AK_h{h:03d}v{v:03d}")))
+        xmin, _, _, ymax = g.bounds(tile)
+        fp = footprint_lonlat({"crsWkt": None, "epsg": ARD_REGIONS["AK"].crs, "transform": [30, 0, xmin, 0, -30, ymax],
+                               "width": 5000, "height": 5000})
+        self.assertEqual(fp.geom_type, "MultiPolygon")
+        self.assertEqual(len(fp.geoms), 2)
+        self.assertLess(sum(p.bounds[2] - p.bounds[0] for p in fp.geoms), 20)
+
+    def test_acquire_runs_tiles_one_at_a_time_under_the_account_lock(self):
+        from imagery_library.acquire import AccountLock, acquire
+        fake = Path(self.tmp.name) / "fake-data-loader"
+        probe = Path(self.tmp.name) / "probe.txt"
+        lockfile = self.lib.admin_dir / "locks" / "fake.lock"
+        fake.write_text(f"""#!{sys.executable}
+import fcntl, os, sys
+fd = os.open({str(lockfile)!r}, os.O_RDWR)
+try:
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB); held = "FREE"
+except BlockingIOError:
+    held = "HELD"
+open({str(probe)!r}, "a").write(held + " " + sys.argv[2] + "\\n")
+""")
+        fake.chmod(0o755)
+        needed = tiles_needed(self.lib, self.product, tiles=["h004v004", "h004v005"])
+        rows = acquire(self.lib, self.product, needed, data_loader=str(fake), log=lambda m: None)
+        self.assertEqual([r["exit"] for r in rows], [0, 0])
+        lines = probe.read_text().splitlines()
+        self.assertEqual([x.split()[0] for x in lines], ["HELD", "HELD"])  # each run ran under the lock
+        # a second requester does not run while the account is busy
+        other = AccountLock(self.lib, "fake")
+        self.assertTrue(other.acquire(wait=False))
+        rows = acquire(self.lib, self.product, needed, wait=False, data_loader=str(fake), log=lambda m: None)
+        other.release()
+        self.assertEqual({r["outcome"] for r in rows}, {"skipped: account busy"})
+        self.assertEqual(len(probe.read_text().splitlines()), 2)
+
+
+@unittest.skipUnless(HAVE_GEO, "needs the library extra (geopandas, pyarrow)")
+class CompletenessTests(unittest.TestCase):
+    def test_tile_without_failures_is_complete_when_source_failed_elsewhere(self):
+        from imagery_library.importer import _tile_manifest
+        m = {"dataset": {"complete": False}, "request": {"aoi": {}, "output": {}},
+             "grids": {"landsat": {"h003v004": {}, "h003v005": {}}}, "coverage": {}}
+        ok_rows = [{"key": "a", "status": "acquired", "date": "2023-07-01", "files": []}]
+        self.assertTrue(_tile_manifest(m, "h003v004", ok_rows, Path("/x"), source_unfinished_elsewhere=True)[0]
+                        ["dataset"]["complete"])
+        self.assertFalse(_tile_manifest(m, "h003v004", ok_rows, Path("/x"))[0]["dataset"]["complete"])

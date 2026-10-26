@@ -36,8 +36,11 @@ LINEAGE_FILE = "LINEAGE.json"
 _NAME_RE = re.compile(r"[a-z0-9][a-z0-9_.\-]*")      # product, version, grid system
 _TILE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-]*")  # tile ids: h003v004, AK_h016v005, 10TEK
 
+# PRODUCT.yaml keys that describe a product without changing what is acquired
+_DESCRIPTIVE = {"title", "description", "notes", "published_tiles"}
 _LIBRARY_KEYS = {"name", "description", "layout_version", "maintainers", "contact", "storage"}
-_PRODUCT_KEYS = {"product", "version", "title", "description", "grid_systems", "acquisition", "notes"}
+_PRODUCT_KEYS = {"product", "version", "title", "description", "grid_systems", "acquisition", "notes",
+                 "published_tiles"}
 
 
 class LibraryError(RuntimeError):
@@ -149,6 +152,7 @@ class Product:
     grid_systems: list
     acquisition: dict          # DataLoader request template: everything except aoi and output.dir
     notes: Optional[str] = None
+    published_tiles_file: Optional[str] = None   # tiles the source publishes, per grid system (optional)
     raw: dict = field(default_factory=dict, repr=False)
 
     @property
@@ -179,7 +183,24 @@ class Product:
         return cls(root=root, name=_name(d["product"], "product", where), version=_name(d["version"], "version", where),
                    title=str(d["title"]), description=str(d.get("description") or ""),
                    grid_systems=[_name(g, "grid system", where) for g in grids], acquisition=acq,
-                   notes=d.get("notes"), raw=d)
+                   notes=d.get("notes"), published_tiles_file=d.get("published_tiles"), raw=d)
+
+    def published_tiles(self) -> Optional[dict]:
+        """{grid_system: set of tile ids} the source publishes, or None if
+        the product has no list (then every grid position counts)."""
+        if not self.published_tiles_file:
+            return None
+        p = self.root / self.published_tiles_file
+        if not p.exists():
+            raise LibraryError(f"{self.key}: published_tiles file {p} is missing")
+        return {g: set(ts) for g, ts in json.loads(p.read_text())["tiles"].items()}
+
+    def locate(self, tile: str) -> tuple[str, str]:
+        """(grid_system, canonical tile id): one spelling per tile, so the
+        same tile can never get two directories (CU_h003v004 -> h003v004)."""
+        from imagery_library.grids import grid_system_of
+
+        return grid_system_of(tile, self.grid_systems)
 
     def tile_path(self, grid_system: str, tile: str) -> Path:
         if grid_system not in self.grid_systems:
@@ -300,6 +321,9 @@ def add_product(lib: Library, spec_path) -> Product:
     d = yaml.safe_load(Path(spec_path).read_text()) or {}
     root = lib.root / PRODUCTS_DIR / str(d.get("product")) / str(d.get("version"))
     p = Product.from_dict(d, root, str(spec_path))
+    extra = Path(spec_path).parent / p.published_tiles_file if p.published_tiles_file else None
+    if extra is not None and not extra.exists():
+        raise LibraryError(f"{spec_path}: published_tiles file {extra} not found")
     try:  # the template must be a valid DataLoader request once a tile is filled in
         acq = copy.deepcopy(p.acquisition)
         acq.setdefault("version", 1)
@@ -309,9 +333,12 @@ def add_product(lib: Library, spec_path) -> Product:
     except ConfigError as e:
         raise LibraryError(f"{spec_path}: acquisition is not a valid DataLoader request: {e}") from None
     if (root / PRODUCT_FILE).exists():
-        if yaml.safe_load((root / PRODUCT_FILE).read_text()) != d:
-            raise LibraryError(f"{p.key} already exists with a different spec; a changed product is a new version")
-        return p
+        old = yaml.safe_load((root / PRODUCT_FILE).read_text()) or {}
+        if {k: v for k, v in old.items() if k not in _DESCRIPTIVE} != {k: v for k, v in d.items() if k not in _DESCRIPTIVE}:
+            raise LibraryError(f"{p.key} already exists with a different spec; a changed product is a new version "
+                               f"(only {', '.join(sorted(_DESCRIPTIVE))} may be updated in place)")
     root.mkdir(parents=True, exist_ok=True)
+    if extra is not None:
+        atomic_write(root / p.published_tiles_file, extra.read_text())
     atomic_write(root / PRODUCT_FILE, Path(spec_path).read_text())
     return p
