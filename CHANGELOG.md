@@ -1,23 +1,26 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 (2026-10-28)
 
-### Added
+Stabilization after the October 2026 audit
+([docs/development/AUDIT_2026-10.md](docs/development/AUDIT_2026-10.md)),
+plus native Alaska and Hawaii ARD grids.
+Manifest schema 1.1 is additive; 1.0 datasets are read and resumed as is.
+Config changes: see *Provider options and credentials* and *Product
+consistency* below.
+
+### Native Alaska and Hawaii ARD grids
 - **Native Alaska and Hawaii ARD grids.** `aoi.tiles` now takes
   region-qualified USGS ARD tile ids: `AK_h021v008` (Alaska grid),
   `HI_h001v001` (Hawaii), `CU_h003v004` (CONUS). Each region has its own
   Albers projection and origin; tiles are read on their native grid like
   CONUS tiles. One request can mix regions.
-
-### Fixed
 - **An Alaska tile id could silently fetch a CONUS tile.** Every region
   numbers its tiles from `h000v000`, but tile searches always queried the
   CONUS grid: `h021v008` meant to be near Juneau validated and downloaded
   northern Illinois. Searches now query the tile's own region, discovered
   items must match the tile's region as well as its h/v, and an item from
   another region is refused when its grid is read.
-
-### Compatibility
 - A bare tile id still means CONUS, and CONUS tiles are still recorded
   bare (`CU_h003v004` is recorded as `h003v004`), so existing datasets'
   keys, paths, manifests and request identity are unchanged and resume
@@ -28,14 +31,6 @@
   alias); `parse()` now returns `(region, h, v)`.
 - The same tile listed twice (e.g. `h003v004` and `CU_h003v004`) is now a
   config error.
-
-## 1.1.0 (unreleased)
-
-Stabilization after the October 2026 audit
-([docs/development/AUDIT_2026-10.md](docs/development/AUDIT_2026-10.md)).
-Manifest schema 1.1 is additive; 1.0 datasets are read and resumed as is.
-Config changes: see *Provider options and credentials* and *Product
-consistency* below.
 
 ### Fixed
 - **Sentinel-2 scenes dropped on Planetary Computer.** Processing-version

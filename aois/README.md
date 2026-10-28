@@ -78,4 +78,4 @@ stored, ~5.9 TB downloaded, ~4.3–5.5 days on one M2M account
    catalog.
 
 The Alaska config needs a DataLoader with native Alaska ARD grid support
-(region-qualified tile ids; see CHANGELOG "Unreleased").
+(region-qualified tile ids; see CHANGELOG 1.1.0).
