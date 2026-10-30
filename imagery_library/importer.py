@@ -6,8 +6,10 @@ request.yaml describing only that tile (item rows are copied verbatim) and
 a LINEAGE.json saying where it came from. Imagery and source metadata are
 hard-linked (same filesystem: no copy, no extra space), copied, or left
 out entirely (`metadata` mode, for dry runs against production metadata).
-Each tile is assembled in a hidden staging directory and renamed into
-place only when complete, so the catalog never sees half a tile.
+Each tile is assembled in the maintainer's staging area (staging/<user>/,
+same filesystem) and renamed into place only when complete, so the catalog
+never sees half a tile. Hard-linked files keep the source's permissions:
+the library's permission policy skips files that still have another name.
 
 The source is only read: its manifest and items are hashed before and
 after, and every file it lists is stat-checked before anything is linked.
@@ -232,7 +234,7 @@ def import_archive(lib: Library, product: Product, src, *, mode: str = "hardlink
         if tp.action != "import":
             log(f"  {tp.tile}: {tp.action}" + (f" -- {tp.problems[0]}" if tp.problems else ""))
             continue
-        stage = tp.dest.parent / f".import-{tp.tile}-{os.getpid()}"
+        stage = lib.staging_dir() / f".import-{product.version}-{tp.grid_system}-{tp.tile}-{os.getpid()}"
         if stage.exists():
             shutil.rmtree(stage)
         stage.mkdir(parents=True)
@@ -261,6 +263,7 @@ def import_archive(lib: Library, product: Product, src, *, mode: str = "hardlink
             fsync_dir(stage)
             if tp.dest.exists():
                 raise LibraryError(f"{tp.dest} appeared during the import; not replacing it")
+            tp.dest.parent.mkdir(parents=True, exist_ok=True)
             os.rename(stage, tp.dest)
             fsync_dir(tp.dest.parent)
         except BaseException:

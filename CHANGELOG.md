@@ -19,6 +19,19 @@
   `~/.cache/data-loader/locks`) and exits with code 6 if another run holds
   it, or queues with `--wait-for-account`. Point `DATALOADER_LOCK_DIR` at a
   shared directory to cover several people and machines.
+- **Imagery library layout 2** (`imagery_library`; DataLoader itself
+  unchanged). One root per product family, organised by collection,
+  native grid and tile: `Landsat-ARD/collection_2/{conus,alaska,hawaii}/<tile>/`
+  (`PRODUCT.yaml` `grid_dirs`; Alaska/Hawaii ids keep their `AK_`/`HI_`
+  prefix). Catalog at stable names (`catalog/tiles.parquet`,
+  `observations.parquet`, `catalog.json`) through `catalog/current` ->
+  `catalog/builds/<id>`, plus a `grid` column. New tiles are acquired in
+  `staging/<user>/`, checksum-verified, then moved into place (`promote`).
+  Imports stage there too. The permission policy leaves hard-linked files
+  that still have a project-archive name untouched. `init --readme` installs
+  the dataset README (`library/landsat_ard/README.md`). Decisions:
+  `docs/library-architecture.md`. Layout 1 (`products/...`, proof of
+  concept only) is no longer read.
 - **Native Alaska and Hawaii ARD grids.** `aoi.tiles` now takes
   region-qualified USGS ARD tile ids: `AK_h021v008` (Alaska grid),
   `HI_h001v001` (Hawaii), `CU_h003v004` (CONUS). Each region has its own

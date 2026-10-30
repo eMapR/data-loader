@@ -5,7 +5,7 @@
 # DataLoader treats as part of a dataset's identity makes a new product
 # version, never an edit of this one.
 product: landsat_ard_sr
-version: c2
+version: collection_2               # USGS Landsat Collection 2; the directory name below the root
 title: USGS Landsat Collection 2 ARD surface reflectance (native uint16 DN + QA_PIXEL)
 description: >-
   Every Landsat 4-9 observation USGS publishes on the ARD tile grids from 1990
@@ -14,6 +14,10 @@ description: >-
   QA_PIXEL, one GeoTIFF per observation. Source files are SHA-512 checked
   against the USGS STAC record before they are written.
 grid_systems: [usgs_ard_conus, usgs_ard_alaska, usgs_ard_hawaii]
+grid_dirs:                           # each ARD region is its own grid: own Albers projection, own h/v numbering
+  usgs_ard_conus: conus
+  usgs_ard_alaska: alaska
+  usgs_ard_hawaii: hawaii
 published_tiles: published_tiles.json   # tiles USGS publishes (bench/ard_published_tiles.py, 2026-10-26)
 acquisition:
   version: 1

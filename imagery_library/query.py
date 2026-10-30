@@ -63,7 +63,7 @@ class QueryResult:
     observations: object            # DataFrame
     covered_share: float            # share of the AOI inside tiles the library holds
     published_share: Optional[float] = None  # share inside tiles the source publishes (None: unknown)
-    missing: list = field(default_factory=list)   # [{"product", "grid_system", "tile", "aoi_share"}]
+    missing: list = field(default_factory=list)   # [{"product", "grid", "grid_system", "tile", "aoi_share"}]
     unavailable_tiles: list = field(default_factory=list)  # catalogued, imagery not present here
     excluded_unverified: int = 0    # observations dropped by verified_only
 
@@ -80,7 +80,7 @@ class QueryResult:
             if r.acquisition_state == "incomplete" and (r.failed or r.pending):
                 state += f" ({r.failed} failed, {r.pending} pending)"
             ver = r.verification_state + (f" {str(r.last_verified)[:10]}" if r.last_verified else "")
-            lines.append(f"  {r.grid_system}/{r.tile:<12} {r.aoi_share:6.1%} of AOI  {n:>6} obs  "
+            lines.append(f"  {r.grid}/{r.tile:<12} {r.aoi_share:6.1%} of AOI  {n:>6} obs  "
                          f"acquisition: {state:<12} verification: {ver}")
         nv = int(o["verified"].sum()) if len(o) else 0
         lines.append(f"{len(o)} observations ({nv} verified, {len(o) - nv} not yet verified), {tb:.3f} TB"
@@ -96,7 +96,7 @@ class QueryResult:
             by_product.setdefault(m["product"], []).append(m)
         for prod, ms in by_product.items():
             lines.append(f"missing from {prod} (published by the source, not in the library yet): "
-                         + ", ".join(f"{m['grid_system']}/{m['tile']} ({m['aoi_share']:.1%})" for m in ms))
+                         + ", ".join(f"{m['grid']}/{m['tile']} ({m['aoi_share']:.1%})" for m in ms))
         if self.published_share is not None and self.published_share < 0.9995:
             lines.append(f"outside the product: {1 - self.published_share:.1%} of the AOI has no tile the source "
                          "publishes (ocean, or outside the source's coverage)")
@@ -170,9 +170,9 @@ def query(lib: Library, aoi, *, start=None, end=None, product: Optional[str] = N
                     continue  # USGS has nothing there: not "missing"
                 share += t["aoi_share"]
                 if (system, t["tile"]) not in held:
-                    missing.append({"product": p.key, **t})
+                    missing.append({"product": p.key, "grid": p.grid_dir(system), **t})
         if known and pub is not None:
             published_share = max(published_share or 0.0, min(share, 1.0))
-    unavailable = sorted(f"{r.grid_system}/{r.tile}" for r in hit.itertuples() if not r.imagery_present)
+    unavailable = sorted(f"{r.grid}/{r.tile}" for r in hit.itertuples() if not r.imagery_present)
     return QueryResult(lib.root, geom, hit.reset_index(drop=True), obs, min(covered, 1.0), published_share,
                        missing, unavailable, excluded)

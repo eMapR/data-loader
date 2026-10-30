@@ -3,7 +3,7 @@
 region, over the full h/v range of each grid. Writes the list the library
 uses to tell "missing from the library" apart from "not published by USGS".
 
-    python bench/ard_published_tiles.py --out library/products/landsat_ard_sr/c2/published_tiles.json
+    python bench/ard_published_tiles.py --out library/landsat_ard/collection_2/published_tiles.json
 
 One LandsatLook STAC search per tile (public, no M2M account). Re-run when
 USGS adds tiles; the file records when it was made.

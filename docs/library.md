@@ -16,8 +16,8 @@ Production archives have not been migrated; see
 | Part | What | Where | Who changes it |
 |---|---|---|---|
 | Acquisition engine | DataLoader (`data_loader/`): downloads, verifies sources, writes one dataset per tile | this repo | developers |
-| Imagery library | tile datasets + product specs + catalog | storage volume, e.g. `<root>/products/...` | maintainers only (via DataLoader / `imagery-library`) |
-| Catalog | GeoParquet index, generated from the tile datasets | `<root>/catalog/current/` | rebuilt by maintainers; never edited |
+| Imagery library | tile datasets + product specs + catalog | storage volume, e.g. `/vol/v1/Landsat-ARD/collection_2/...` | maintainers only (via DataLoader / `imagery-library`) |
+| Catalog | GeoParquet index, generated from the tile datasets | `<root>/catalog/` | rebuilt by maintainers; never edited |
 | Project configurations | AOIs and what each project needs | this repo, `aois/` | project owners |
 
 The library code (`imagery_library/`) reads DataLoader's output contract
@@ -26,22 +26,28 @@ engine internals. Projects hold no imagery and no acquisition settings.
 
 ## Layout
 
+Layout 2 (decisions and reasons: [library-architecture.md](library-architecture.md)).
+One root per product family; on Iowa: `/vol/v1/Landsat-ARD`.
+
 ```
-<root>/
-  LIBRARY.yaml                                  name, maintainers, contact, layout_version
-  products/
-    landsat_ard_sr/c2/                          product / version
-      PRODUCT.yaml                              the product spec (copy of library/products/... in the repo)
-      published_tiles.json                      tiles USGS publishes, per grid (ocean/foreign positions are not)
-      usgs_ard_conus/h003v004/                  grid system / tile = one ordinary DataLoader dataset
-        manifest.json  items.jsonl  request.yaml  metadata/  landsat/h003v004/<year>/*.tif
-        LINEAGE.json                            only for tiles imported from an older archive
-      usgs_ard_alaska/AK_h016v005/
+Landsat-ARD/
+  README.md                                     the dataset's guide (library/landsat_ard/README.md in the repo)
+  LIBRARY.yaml                                  name, maintainers, contact, layout_version 2, permissions
+  collection_2/                                 product version
+    PRODUCT.yaml                                the product spec (library/landsat_ard/collection_2/ in the repo)
+    published_tiles.json                        tiles USGS publishes, per grid (ocean/foreign positions are not)
+    conus/h003v004/                             grid dir / tile = one ordinary DataLoader dataset
+      manifest.json  items.jsonl  request.yaml  metadata/  landsat/h003v004/<year>/*.tif
+      LINEAGE.json                              only for tiles imported from an older archive
+    alaska/AK_h016v005/                         Alaska and Hawaii ids keep their AK_/HI_ prefix
+    hawaii/
   catalog/
-    current -> 20261026T185339877200Z/          atomic switch to the latest build
-    20261026T185339877200Z/tiles.parquet        GeoParquet: one row per tile, footprint in EPSG:4326
-                          observations.parquet  one row per acquired observation
-                          catalog.json          build summary (counts, problems, builder commit)
+    tiles.parquet -> current/tiles.parquet      stable names: GeoParquet, one row per tile, footprint in EPSG:4326
+    observations.parquet -> current/...         one row per acquired observation
+    catalog.json -> current/catalog.json        build summary (counts, problems, builder commit)
+    current -> builds/20261026T185339877200Z/   atomic switch to the latest build
+    builds/<id>/                                every build (the last 3, and any under an hour old)
+  staging/<user>/                               maintainers' work in progress: new tiles, imports (never catalogued)
   admin/
     imports.jsonl                               every import (what, from where, by which code)
     acquisitions.jsonl                          every `imagery-library acquire` run (tile, outcome, time)
@@ -131,7 +137,7 @@ platforms: [landsat-5, landsat-7]
 
 ```
 $ imagery-library query /path/to/library gorge_summers.yaml --out files.csv
-AOI intersects 2 library tile(s): usgs_ard_conus/h003v003 (63.5%), usgs_ard_conus/h004v003 (36.5%)
+AOI intersects 2 library tile(s): conus/h003v003 (63.5%), conus/h004v003 (36.5%)
 497 observations, 0.047 TB, 2000-06-05 .. 2005-09-25
 AOI covered by library tiles: 100.0%
 ```
@@ -165,13 +171,17 @@ order, scale/offset, nodata and QA meaning are in its tile's
 ## Maintaining the library
 
 ```
-imagery-library init ROOT --name ... --description ... --maintainer ...
-imagery-library add-product ROOT library/products/landsat_ard_sr/c2/PRODUCT.yaml
+imagery-library init /vol/v1/Landsat-ARD --name ... --description ... --maintainer ... \
+    --readme library/landsat_ard/README.md [--group <maintainers' group>]
+imagery-library add-product /vol/v1/Landsat-ARD library/landsat_ard/collection_2/PRODUCT.yaml
 
 # a project needs an AOI: which tiles, which are already held?
 imagery-library acquire-config ROOT --aoi aois/usfs_r10_tanana_river.geojson
-# acquire the missing ones, one tile at a time, queued behind any other run on the account (run in tmux)
+# acquire the missing ones, one tile at a time, queued behind any other run on the account (run in tmux);
+# each new tile is written to staging/<you>/, checksum-verified, then moved into collection_2/<grid>/
 imagery-library acquire ROOT --aoi aois/usfs_r10_tanana_river.geojson
+# a tile staged by a manual `data-loader run` of an acquire-config config: verify and move it into place
+imagery-library promote ROOT --tile AK_h016v005
 # updates (newly published observations) for held tiles
 imagery-library acquire ROOT --tile AK_h016v005 --include-held
 
@@ -183,8 +193,9 @@ imagery-library catalog ROOT                # rebuild after runs / verifies
 
 ### Concurrency: what is guaranteed
 
-- **No duplicate tiles.** A tile has exactly one directory (product /
-  version / grid / canonical id). `acquire` and `acquire-config` list tiles
+- **No duplicate tiles.** A tile has exactly one directory (version /
+  grid / canonical id) and at most one staging directory per maintainer; a
+  tile another maintainer is staging is skipped. `acquire` and `acquire-config` list tiles
   already held instead of acquiring them, and the importer refuses a tile
   that exists with different content.
 - **One writer per tile.** DataLoader holds an exclusive lock on the tile
@@ -200,7 +211,13 @@ imagery-library catalog ROOT                # rebuild after runs / verifies
   they are held on the server, so they work across machines.
 - **Permissions are applied, not hoped for.** Every maintainer command
   brings what it wrote to the policy (read-only imagery, maintainers-only
-  admin); `imagery-library permissions ROOT` audits the whole library.
+  admin and staging); `imagery-library permissions ROOT` audits the whole
+  library. Files that also have a name outside the library (a hard-link
+  migration in progress) are left exactly as they are and counted as
+  `shared`; they are sealed once the old names are retired.
+- **Nothing half-finished is catalogued.** New tiles live in `staging/`
+  until they are complete and checksum-verified; updates to held tiles
+  show as `updating`.
 - **Readers never see partial state.** DataLoader writes each GeoTIFF to a
   temp name, fsyncs, renames, and only then records it; the catalog is built
   into a new directory and `catalog/current` is switched with one atomic
@@ -231,14 +248,12 @@ project-named, multi-tile archive into tile datasets:
 - imagery and source metadata are hard-linked (same filesystem: no copy, no
   extra space) or copied (`--mode copy`, across filesystems);
   `--mode metadata` brings metadata only (for dry runs);
-- each tile is assembled in a hidden staging directory and renamed into
-  place when complete; `LINEAGE.json` records the source archive, its
+- each tile is assembled in the maintainer's `staging/<user>/` and renamed
+  into place when complete; `LINEAGE.json` records the source archive, its
   original request and a fingerprint of its manifest/items;
 - the source is only read: every listed file is stat-checked first,
   manifest/items are hashed before and after, and the importer refuses a
   tile whose product spec differs from the product or that is already in
   the library with different content. `--dry-run` writes nothing.
 
-Phased plan for production: see the proposal and
-`docs/library-storage-requirements.md`. Nothing is migrated until the
-storage location and permissions are agreed.
+Phased plan for production: [library-migration-checklist.md](library-migration-checklist.md).

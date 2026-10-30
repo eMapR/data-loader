@@ -10,14 +10,19 @@ Policy (LIBRARY.yaml `permissions:`, all optional; defaults below):
     imagery: "0444"       GeoTIFFs and USGS source records once acquired: nobody edits them in place
                           (a maintainer can still replace a damaged one: rename needs only the directory)
     metadata: "0644"      manifest, items, request, lineage, product spec, catalog: rewritten atomically
-    admin_dirs: "2770"    admin/ and each tile's .state/: maintainers only
-    admin_files: "0660"   logs, locks, verify records, DataLoader's run journal and lock
+    admin_dirs: "2770"    admin/, staging/ and each tile's .state/: maintainers only
+    admin_files: "0660"   logs, locks, verify records, staged work, DataLoader's run journal and lock
 
 Researchers get read access through "other" (or an ACL the storage admins
 add). Files are written by DataLoader with the maintainer's umask and any
 default ACL; this module brings them to the policy after each operation.
 Changing the mode of a hard-linked file changes it for every name of that
-file (e.g. the old project-named archive during a hard-link migration).
+file, so a file with more than one name (during a hard-link migration, the
+same file is also in the old project-named archive) is never changed here:
+it is counted as `shared` and left exactly as it is. Once the old names
+are retired the file has one name and the policy applies to it as usual.
+(A file with two names inside the library, e.g. one source record two
+tiles share, is skipped the same way; USGS ARD records are per tile.)
 """
 from __future__ import annotations
 
@@ -28,7 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Optional
 
-from imagery_library.layout import ADMIN_DIR, CATALOG_DIR, LibraryError
+from imagery_library.layout import ADMIN_DIR, CATALOG_DIR, RESERVED, STAGING_DIR, LibraryError
 
 _KEYS = {"group", "dirs", "imagery", "metadata", "admin_dirs", "admin_files"}
 DEFAULTS = {"dirs": "2775", "imagery": "0444", "metadata": "0644", "admin_dirs": "2770", "admin_files": "0660"}
@@ -72,13 +77,13 @@ class Policy:
 
     def mode_for(self, lib_root: Path, path: Path, is_dir: bool) -> int:
         rel = path.relative_to(lib_root).parts
-        admin = bool(rel) and (rel[0] == ADMIN_DIR or ".state" in rel)
+        private = bool(rel) and (rel[0] in (ADMIN_DIR, STAGING_DIR) or ".state" in rel)
         if is_dir:
-            return self.modes["admin_dirs"] if admin else self.modes["dirs"]
-        if admin or (rel and rel[0] == CATALOG_DIR and rel[-1].startswith(".")):  # catalog build lock
+            return self.modes["admin_dirs"] if private else self.modes["dirs"]
+        if private or (rel and rel[0] == CATALOG_DIR and rel[-1].startswith(".")):  # catalog build lock
             return self.modes["admin_files"]
-        if "products" in rel[:1] and any(p in _IMAGERY_TOP for p in rel[4:-1]):
-            return self.modes["imagery"]  # products/<p>/<v>/<grid>/<tile>/(landsat|metadata)/...
+        if rel and rel[0] not in RESERVED and any(p in _IMAGERY_TOP for p in rel[3:-1]):
+            return self.modes["imagery"]  # <version>/<grid dir>/<tile>/(landsat|metadata)/...
         return self.modes["metadata"]
 
 
@@ -88,6 +93,7 @@ class Report:
     changed: int = 0
     problems: list = field(default_factory=list)
     acl: int = 0
+    shared: int = 0        # files with another name outside the library: left as they are
 
 
 def _walk(top: Path) -> Iterable[tuple[Path, bool]]:
@@ -126,6 +132,9 @@ def apply(lib, paths: Optional[list] = None, *, fix: bool = True, policy: Option
         for p, is_dir in _walk(top):
             rep.checked += 1
             st = p.lstat()
+            if not is_dir and st.st_nlink > 1:
+                rep.shared += 1
+                continue
             want = policy.mode_for(root, p, is_dir)
             have = stat.S_IMODE(st.st_mode)
             wrong_group = policy.gid is not None and st.st_gid != policy.gid

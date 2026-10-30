@@ -1,9 +1,15 @@
 """The library catalog: generated from the tile datasets, never edited.
 
-    catalog/current -> <build-id>/          swapped atomically when a build finishes
-    catalog/<build-id>/tiles.parquet         GeoParquet, one row per tile dataset (footprint in EPSG:4326)
-    catalog/<build-id>/observations.parquet  one row per acquired observation
-    catalog/<build-id>/catalog.json          build summary
+    catalog/tiles.parquet -> current/tiles.parquet   stable names researchers open (also
+    catalog/observations.parquet, catalog.json)      observations.parquet, catalog.json)
+    catalog/current -> builds/<build-id>/            swapped atomically when a build finishes
+    catalog/builds/<build-id>/tiles.parquet          GeoParquet, one row per tile dataset (footprint in EPSG:4326)
+    catalog/builds/<build-id>/observations.parquet   one row per acquired observation
+    catalog/builds/<build-id>/catalog.json           build summary
+
+The stable names resolve through `current` each time a file is opened; a
+reader that needs tiles and observations from the same build resolves
+`current` once (as `current_catalog` and the query API do).
 
 Tile manifests and items.jsonl are the source of truth; the catalog can be
 rebuilt from them at any time and reads no imagery.
@@ -52,6 +58,8 @@ from imagery_library.layout import (LINEAGE_FILE, Library, LibraryError, _resolv
                                     atomic_write, fsync_dir, software, spec_hash, spec_identity)
 
 CURRENT = "current"
+BUILDS = "builds"
+CATALOG_FILES = ("tiles.parquet", "observations.parquet", "catalog.json")
 KEEP_BUILDS = 3
 BUILD_MIN_AGE_S = 3600
 VERIFY_LOG = "verification.jsonl"
@@ -157,8 +165,8 @@ def _tile_records(lib: Library, product, system: str, tile: str, path: Path, ver
     request = _resolved_request(m.get("request", {}), m.get("products"))
     shash = spec_hash(spec_identity(request))
     tile_row = {
-        "product": product.name, "version": product.version, "grid_system": system, "tile": tile, "path": rel,
-        "geometry": footprint_lonlat(grid),
+        "product": product.name, "version": product.version, "grid_system": system,
+        "grid": product.grid_dir(system), "tile": tile, "path": rel, "geometry": footprint_lonlat(grid),
         "acquisition_state": acq_state, "verification_state": ver_state,
         "observations": counts["acquired"], "verified_observations": n_verified,
         "failed": counts["failed"], "pending": counts["pending"], "filtered": counts["filtered"],
@@ -184,8 +192,8 @@ def _tile_records(lib: Library, product, system: str, tile: str, path: Path, ver
         f = next((f for f in r.get("files", []) if f.get("bandSet") == "bands"), (r.get("files") or [{}])[0])
         si = r.get("sourceIntegrity") or {}
         obs.append({
-            "product": product.name, "version": product.version, "grid_system": system, "tile": tile,
-            "key": r["key"], "item_id": r.get("itemId"), "sensor": r.get("sensor"), "platform": r.get("platform"),
+            "product": product.name, "version": product.version, "grid_system": system,
+            "grid": product.grid_dir(system), "tile": tile, "key": r["key"], "item_id": r.get("itemId"), "sensor": r.get("sensor"), "platform": r.get("platform"),
             "date": r.get("date"), "datetime": r.get("datetime"), "season_year": r.get("seasonYear"),
             "cloud_percent": r.get("eo:cloud_cover"), "fill_percent": r.get("fillPercent"),
             "valid_fraction": r.get("validFraction"),
@@ -219,8 +227,8 @@ class _BuildLock:
 
 
 def _prune(lib: Library, keep_target: Path) -> None:
-    builds = sorted(p for p in lib.catalog_dir.iterdir()
-                    if p.is_dir() and not p.is_symlink() and p.name[:1].isdigit())
+    bdir = lib.catalog_dir / BUILDS
+    builds = sorted(p for p in bdir.iterdir() if p.is_dir() and not p.is_symlink() and p.name[:1].isdigit())
     now = time.time()
     for old in builds[:-KEEP_BUILDS]:
         if old.resolve() == keep_target or now - old.stat().st_mtime < BUILD_MIN_AGE_S:
@@ -247,8 +255,8 @@ def build_catalog(lib: Library, *, log=print) -> Path:
             tiles.append(t)
             obs.extend(o)
         build_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-        out = lib.catalog_dir / build_id
-        out.mkdir()
+        out = lib.catalog_dir / BUILDS / build_id
+        out.mkdir(parents=True)
         cols = ["product", "version", "grid_system", "tile", "path", "geometry"]
         tdf = gpd.GeoDataFrame(tiles, geometry="geometry", crs="EPSG:4326") if tiles else \
             gpd.GeoDataFrame({c: [] for c in cols}, geometry="geometry", crs="EPSG:4326")
@@ -274,8 +282,11 @@ def build_catalog(lib: Library, *, log=print) -> Path:
         tmp = lib.catalog_dir / f".{CURRENT}.{os.getpid()}"
         if tmp.is_symlink() or tmp.exists():
             tmp.unlink()
-        os.symlink(build_id, tmp)
+        os.symlink(f"{BUILDS}/{build_id}", tmp)
         os.replace(tmp, link)
+        for name in CATALOG_FILES:  # stable names, created once; they follow `current`
+            if not (lib.catalog_dir / name).is_symlink():
+                os.symlink(f"{CURRENT}/{name}", lib.catalog_dir / name)
         fsync_dir(lib.catalog_dir)
         _prune(lib, out.resolve())
         from imagery_library.permissions import apply_quietly
@@ -301,8 +312,6 @@ def verify_tiles(lib: Library, *, product: Optional[str] = None, tiles: Optional
                  checksums: bool = True, log=print) -> list[dict]:
     """Run DataLoader's verify on each tile dataset and log the result.
     Tiles a run is writing are skipped (verify them when it finishes)."""
-    from data_loader.dataset import open_dataset
-
     results = []
     sw = software()
     for p, system, tile, path in lib.tiles(product=product):
@@ -317,25 +326,35 @@ def verify_tiles(lib: Library, *, product: Optional[str] = None, tiles: Optional
             log(f"  {rel}: a DataLoader run is updating it; skipped")
             results.append({"path": rel, "tile": tile, "ok": None, "skipped": "updating"})
             continue
-        started = _now()
-        t0 = time.monotonic()
-        ds = open_dataset(path)
-        checked = {r["key"]: r.get("updated") for r in ds.items()}  # what this verify covers, taken first
-        problems = ds.verify(checksums=checksums)
-        files = sum(1 for _ in ds.files(band_set=None))
-        if checksums:
-            cf = lib.admin_dir / VERIFIED_DIR / f"{rel}.json"
-            cf.parent.mkdir(parents=True, exist_ok=True)
-            atomic_write(cf, json.dumps({"started": started, "ok": not problems,
-                                         "rows": checked if not problems else {}}) + "\n")
-        row = {"time": _now(), "started": started, "path": rel, "product": p.key, "tile": tile,
-               "ok": not problems, "checksums": checksums, "files": files, "problems": len(problems),
-               "examples": problems[:10], "seconds": round(time.monotonic() - t0, 1), "software": sw}
-        append_jsonl(lib.admin_dir / VERIFY_LOG, row)
-        results.append(row)
-        from imagery_library.permissions import apply_quietly
-
-        apply_quietly(lib, [lib.admin_dir])
-        log(f"  {rel}: {'OK' if not problems else f'{len(problems)} problem(s)'} "
-            f"({files} files, {'sha256' if checksums else 'sizes'}, {row['seconds']} s)")
+        results.append(verify_dataset(lib, p, tile, path, rel, checksums=checksums, software_=sw, log=log))
     return results
+
+
+def verify_dataset(lib: Library, product, tile: str, path: Path, rel: str, *, checksums: bool = True,
+                   software_: Optional[dict] = None, log=print) -> dict:
+    """DataLoader's verify of the tile dataset at `path`, logged under the
+    tile's library path `rel` (they differ when a staged tile is verified
+    before it is moved into place)."""
+    from data_loader.dataset import open_dataset
+
+    started = _now()
+    t0 = time.monotonic()
+    ds = open_dataset(path)
+    checked = {r["key"]: r.get("updated") for r in ds.items()}  # what this verify covers, taken first
+    problems = ds.verify(checksums=checksums)
+    files = sum(1 for _ in ds.files(band_set=None))
+    if checksums:
+        cf = lib.admin_dir / VERIFIED_DIR / f"{rel}.json"
+        cf.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write(cf, json.dumps({"started": started, "ok": not problems,
+                                     "rows": checked if not problems else {}}) + "\n")
+    row = {"time": _now(), "started": started, "path": rel, "product": product.key, "tile": tile,
+           "ok": not problems, "checksums": checksums, "files": files, "problems": len(problems),
+           "examples": problems[:10], "seconds": round(time.monotonic() - t0, 1), "software": software_ or software()}
+    append_jsonl(lib.admin_dir / VERIFY_LOG, row)
+    from imagery_library.permissions import apply_quietly
+
+    apply_quietly(lib, [lib.admin_dir])
+    log(f"  {rel}: {'OK' if not problems else f'{len(problems)} problem(s)'} "
+        f"({files} files, {'sha256' if checksums else 'sizes'}, {row['seconds']} s)")
+    return row

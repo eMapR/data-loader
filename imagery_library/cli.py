@@ -5,11 +5,13 @@ Researchers (read-only):
     imagery-library tiles ROOT                  what the library holds, per tile
 
 Maintainers:
-    imagery-library init ROOT --name ...        create an empty library
+    imagery-library init ROOT --name ...        create an empty library (one root per product family)
     imagery-library add-product ROOT SPEC.yaml  install a product spec (PRODUCT.yaml)
     imagery-library import ROOT ARCHIVE         split a project archive into library tiles (source untouched)
     imagery-library acquire-config ROOT ...     DataLoader configs for tiles an AOI needs and the library lacks
-    imagery-library acquire ROOT ...            run those tiles one at a time, queued per source account
+    imagery-library acquire ROOT ...            run those tiles one at a time, queued per source account;
+                                                new tiles are staged, verified, then moved into place
+    imagery-library promote ROOT --tile T       move a tile staged by a manual `data-loader run` into place
     imagery-library verify ROOT                 DataLoader verify on every tile, logged for the catalog
     imagery-library catalog ROOT                rebuild the catalog
     imagery-library permissions ROOT [--fix]    check (or apply) the permission policy
@@ -33,7 +35,7 @@ _QUERY_KEYS = {"aoi", "start", "end", "product", "version", "platforms", "max_cl
 
 def cmd_init(a) -> int:
     lib = init_library(a.root, name=a.name, description=a.description, maintainers=a.maintainer or [],
-                       contact=a.contact, group=a.group)
+                       contact=a.contact, group=a.group, readme=a.readme)
     print(f"created library {lib.name!r} at {lib.root}")
     return 0
 
@@ -53,7 +55,7 @@ def cmd_import(a) -> int:
     print(f"{'DRY RUN: ' if a.dry_run else ''}{r.source} -> {product.key} ({r.mode})")
     for tp in r.tiles:
         c = tp.counts
-        print(f"  {tp.grid_system}/{tp.tile:<12} {tp.action:<26} acquired {c['acquired']:>6}  failed {c['failed']:>3}  "
+        print(f"  {product.grid_dir(tp.grid_system)}/{tp.tile:<12} {tp.action:<26} acquired {c['acquired']:>6}  failed {c['failed']:>3}  "
               f"pending {c['pending']:>3}  files {len(tp.files):>6}  {tp.bytes / 1e9:8.1f} GB")
         for p in tp.problems[:5]:
             print(f"      {p}")
@@ -69,9 +71,12 @@ def cmd_acquire_config(a) -> int:
     needed = tiles_needed(lib, product, aoi=a.aoi, tiles=a.tile)
     for r in needed:
         share = f"{r['aoi_share']:6.1%}" if r["aoi_share"] is not None else "     -"
-        print(f"  {r['grid_system']}/{r['tile']:<12} {share}  {'held (update only)' if r['held'] else 'NEW'}")
+        staged = f"  (staged by {', '.join(r['staged_by'])})" if r["staged_by"] else ""
+        print(f"  {product.grid_dir(r['grid_system'])}/{r['tile']:<12} {share}  "
+              f"{'held (update only)' if r['held'] else 'NEW'}{staged}")
     if a.out_dir:
-        written = write_configs(lib, product, needed, a.out_dir, include_held=a.include_held)
+        written = write_configs(lib, product, needed, a.out_dir, include_held=a.include_held,
+                                staging=lib.staging_dir())
         print(f"wrote {len(written)} config(s) to {a.out_dir}")
     return 0
 
@@ -87,6 +92,18 @@ def cmd_acquire(a) -> int:
           + ("" if a.include_held else f" ({len(needed) - len(todo)} already held; --include-held updates them)"))
     rows = acquire(lib, product, needed, include_held=a.include_held, wait=not a.no_wait)
     return 0 if all(r.get("exit") == 0 for r in rows) else 3
+
+
+def cmd_promote(a) -> int:
+    from imagery_library.acquire import promote
+
+    lib = open_library(a.root)
+    product = lib.product(a.product, a.version)
+    ok = True
+    for t in a.tile:
+        system, tile = product.locate(t)
+        ok &= promote(lib, product, system, tile, lib.staging_dir() / product.tile_rel(system, tile))
+    return 0 if ok else 4
 
 
 def cmd_verify(a) -> int:
@@ -108,7 +125,9 @@ def cmd_permissions(a) -> int:
         print("warning: no permissions.group in LIBRARY.yaml: files keep whatever group they were created with, "
               "and setgid directories may not be settable; set it to the maintainers' group")
     print(f"checked {rep.checked} paths; {'changed ' + str(rep.changed) if a.fix else 'differ: ' + str(len(rep.problems))}"
-          + (f"; {rep.acl} carry POSIX ACLs (the mode sets their mask)" if rep.acl else ""))
+          + (f"; {rep.acl} carry POSIX ACLs (the mode sets their mask)" if rep.acl else "")
+          + (f"; {rep.shared} files also have a name outside the library (hard-link migration): left as they are"
+             if rep.shared else ""))
     for p in [p for p in rep.problems if p][:20]:
         print(f"  {p}")
     return 4 if rep.problems else 0
@@ -148,10 +167,10 @@ def cmd_tiles(a) -> int:
     t = gpd.read_parquet(current_catalog(lib) / "tiles.parquet")
     print(f"{'product':<26} {'grid/tile':<28} {'obs':>7} {'verified':>8} {'first':>11} {'last':>11} {'TB':>7}  "
           f"{'acquisition':<11} verification")
-    for r in t.sort_values(["product", "version", "grid_system", "tile"]).itertuples():
+    for r in t.sort_values(["product", "version", "grid", "tile"]).itertuples():
         acq = r.acquisition_state + (f" ({r.failed} failed)" if r.failed else "")
         ver = r.verification_state + (f" {str(r.last_verified)[:10]}" if r.last_verified else "")
-        print(f"{r.product + '/' + r.version:<26} {r.grid_system + '/' + r.tile:<28} {r.observations:>7} "
+        print(f"{r.product + '/' + r.version:<26} {r.grid + '/' + r.tile:<28} {r.observations:>7} "
               f"{r.verified_observations:>8} {str(r.first_date):>11} {str(r.last_date):>11} {r.bytes / 1e12:7.3f}  "
               f"{acq:<11} {ver}" + ("" if r.imagery_present else "  (metadata only)"))
     return 0
@@ -191,6 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--maintainer", action="append", help="repeat for each maintainer")
     sp.add_argument("--contact")
     sp.add_argument("--group", help="maintainers' group: owns everything (permissions.group)")
+    sp.add_argument("--readme", help="the dataset's README.md (e.g. library/landsat_ard/README.md)")
     sp.set_defaults(fn=cmd_init)
     sp = sub.add_parser("add-product", help="install a PRODUCT.yaml")
     sp.add_argument("root")
@@ -223,6 +243,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--include-held", action="store_true", help="also update tiles the library holds")
     sp.add_argument("--no-wait", action="store_true", help="skip tiles instead of queueing if the account is busy")
     sp.set_defaults(fn=cmd_acquire)
+    sp = sub.add_parser("promote", help="verify a staged tile and move it into place")
+    sp.add_argument("root")
+    sp.add_argument("--product")
+    sp.add_argument("--version")
+    sp.add_argument("--tile", action="append", required=True)
+    sp.set_defaults(fn=cmd_promote)
     sp = sub.add_parser("verify", help="verify tile datasets (logged for the catalog)")
     sp.add_argument("root")
     sp.add_argument("--product")

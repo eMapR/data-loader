@@ -603,6 +603,41 @@ observations, sources unchanged.
   production; irreplaceable imagery 0 files today; re-acquiring the rest
   ~8.5 days of exclusive account time (docs/library-backup-policy.md).
 
+### Library layout 2: Landsat-ARD/collection/grid/tile (2026-10-30)
+
+Decided layout for the shared archive ([library-architecture.md](../library-architecture.md)):
+`/vol/v1/Landsat-ARD/collection_2/{conus,alaska,hawaii}/<tile>/`, a catalog
+at stable names, `staging/<user>/` for new tiles. Implemented in
+`imagery_library` only; DataLoader is unchanged.
+
+- `/vol/v1` is XFS v4 (`crc=0`, `reflink=0`, `noquota`), on the same
+  device as `/vol/v1/data`. Hard links work and add < 1 GB for the 30
+  remaining production tiles (10.7 TB, which a copy could not fit).
+  Measured on the volume: both names share one inode; `chmod` through
+  either name changes both; replace-by-rename through one name leaves the
+  other untouched.
+- So the permission policy now skips files with more than one name.
+  Before this change, a hard-link import would have turned the production
+  archives' files read-only (0664 -> 0444).
+- A tile dataset moved to another path still plans "0 to do". DataLoader
+  ignores the absolute `request.output.dir` recorded in the manifest, so
+  staging, promotion and a later move to shared storage need no manifest
+  rewrite.
+- Rehearsal on POC data on `/vol/v1` (not production):
+  - init with README
+  - hard-link import of a 2-tile archive (CONUS + Alaska, 50 observations):
+    the source's inode, mode, group, size and mtime are identical before
+    and after the import and after `permissions --fix`; only the link
+    count changed
+  - verify 2/2 OK, catalog (stable names), AOI query, `data-loader plan`
+    0 to do
+  - live `imagery-library acquire` of a new tile (h003v004, 22
+    observations, 280 s): staged, verified, moved into
+    `conus/h003v004`, staging emptied, catalog 3 tiles all complete and
+    verified
+- Remaining gap: setgid on `staging/` and `admin/` is dropped, because
+  clarype is not in `trenders`. Needs a maintainers' group (D6).
+
 ## Scaling limitations identified
 
 **Fundamental / external (not something DataLoader controls):**

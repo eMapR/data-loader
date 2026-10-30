@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Iterator
 
 from imagery_library.catalog import CURRENT, tile_rows
-from imagery_library.layout import (ADMIN_DIR, CATALOG_DIR, LIBRARY_FILE, LINEAGE_FILE, PRODUCT_FILE, Library,
+from imagery_library.layout import (ADMIN_DIR, LIBRARY_FILE, LINEAGE_FILE, PRODUCT_FILE, README_FILE, Library,
                                     LibraryError)
 
 TIERS = ("metadata", "irreplaceable", "imagery")
@@ -36,6 +36,8 @@ def backup_list(lib: Library, tier: str) -> Iterator[str]:
     root = lib.root
     if tier == "metadata":
         yield LIBRARY_FILE
+        if (root / README_FILE).exists():
+            yield README_FILE
         for p in lib.products():
             yield str((p.root / PRODUCT_FILE).relative_to(root))
             if p.published_tiles_file:
@@ -43,7 +45,7 @@ def backup_list(lib: Library, tier: str) -> Iterator[str]:
         cur = lib.catalog_dir / CURRENT
         if cur.exists():
             for f in sorted(cur.resolve().iterdir()):
-                yield f"{CATALOG_DIR}/{cur.resolve().name}/{f.name}"
+                yield str(f.relative_to(root.resolve()))
         yield from _files_under(root, root / ADMIN_DIR)
     for p, system, tile, path in lib.tiles():
         rel = path.relative_to(root)

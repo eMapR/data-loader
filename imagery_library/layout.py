@@ -1,10 +1,13 @@
-"""The library on disk: a root, its products, and one DataLoader dataset per tile.
+"""The library on disk: one root per product family, its versions, and one
+DataLoader dataset per tile (layout 2; docs/library-architecture.md).
 
-    <root>/LIBRARY.yaml                                     what this library is, who maintains it
-    <root>/products/<product>/<version>/PRODUCT.yaml        the product spec (one per product version)
-    <root>/products/<product>/<version>/<grid>/<tile>/      an ordinary DataLoader dataset
-    <root>/catalog/current -> <build>/                      generated catalog (see catalog.py)
-    <root>/admin/                                           maintainer logs: imports, verification
+    <root>/README.md                              what the dataset is, for researchers
+    <root>/LIBRARY.yaml                           machine-readable: name, maintainers, permissions
+    <root>/<version>/PRODUCT.yaml                 the product spec, e.g. Landsat-ARD/collection_2/
+    <root>/<version>/<grid dir>/<tile>/           an ordinary DataLoader dataset, e.g. alaska/AK_h021v008/
+    <root>/catalog/                               generated catalog (see catalog.py)
+    <root>/staging/<user>/                        maintainers' work in progress; never catalogued
+    <root>/admin/                                 maintainer logs, verify records, account locks
 
 Imagery is organised by what it is (product, version, grid, tile), never
 by the project that asked for it. A tile directory is exactly what
@@ -25,12 +28,14 @@ from typing import Iterator, Optional
 
 import yaml
 
-LAYOUT_VERSION = 1
+LAYOUT_VERSION = 2
 LIBRARY_FILE = "LIBRARY.yaml"
+README_FILE = "README.md"
 PRODUCT_FILE = "PRODUCT.yaml"
-PRODUCTS_DIR = "products"
 CATALOG_DIR = "catalog"
+STAGING_DIR = "staging"
 ADMIN_DIR = "admin"
+RESERVED = {CATALOG_DIR, STAGING_DIR, ADMIN_DIR}   # top-level names that are never product versions
 LINEAGE_FILE = "LINEAGE.json"
 
 _NAME_RE = re.compile(r"[a-z0-9][a-z0-9_.\-]*")      # product, version, grid system
@@ -39,8 +44,8 @@ _TILE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-]*")  # tile ids: h003v004, AK_h
 # PRODUCT.yaml keys that describe a product without changing what is acquired
 _DESCRIPTIVE = {"title", "description", "notes", "published_tiles"}
 _LIBRARY_KEYS = {"name", "description", "layout_version", "maintainers", "contact", "storage", "permissions"}
-_PRODUCT_KEYS = {"product", "version", "title", "description", "grid_systems", "acquisition", "notes",
-                 "published_tiles"}
+_PRODUCT_KEYS = {"product", "version", "title", "description", "grid_systems", "grid_dirs", "acquisition",
+                 "notes", "published_tiles"}
 
 
 class LibraryError(RuntimeError):
@@ -144,13 +149,14 @@ def spec_hash(identity: dict) -> str:
 class Product:
     """One product version: its spec (PRODUCT.yaml) and its tile datasets."""
 
-    root: Path                 # <library>/products/<product>/<version>
+    root: Path                 # <library>/<version>
     name: str
     version: str
     title: str
     description: str
     grid_systems: list
     acquisition: dict          # DataLoader request template: everything except aoi and output.dir
+    grid_dirs: dict = field(default_factory=dict)  # grid system -> directory name (default: the system name)
     notes: Optional[str] = None
     published_tiles_file: Optional[str] = None   # tiles the source publishes, per grid system (optional)
     raw: dict = field(default_factory=dict, repr=False)
@@ -168,6 +174,14 @@ class Product:
         grids = d["grid_systems"]
         if not isinstance(grids, list) or not grids:
             raise LibraryError(f"{where}: grid_systems must be a non-empty list")
+        if d["version"] in RESERVED:
+            raise LibraryError(f"{where}: version {d['version']!r} is a reserved name ({', '.join(sorted(RESERVED))})")
+        gdirs = d.get("grid_dirs") or {}
+        if not isinstance(gdirs, dict) or set(gdirs) - set(grids):
+            raise LibraryError(f"{where}: grid_dirs must map grid systems listed in grid_systems to directory names")
+        names = [gdirs.get(g, g) for g in grids]
+        if len(set(names)) != len(names):
+            raise LibraryError(f"{where}: grid_dirs gives two grid systems the same directory")
         acq = d["acquisition"]
         if not isinstance(acq, dict):
             raise LibraryError(f"{where}: acquisition must be a DataLoader request mapping")
@@ -183,6 +197,7 @@ class Product:
         return cls(root=root, name=_name(d["product"], "product", where), version=_name(d["version"], "version", where),
                    title=str(d["title"]), description=str(d.get("description") or ""),
                    grid_systems=[_name(g, "grid system", where) for g in grids], acquisition=acq,
+                   grid_dirs={g: _name(n, "grid directory", where) for g, n in gdirs.items()},
                    notes=d.get("notes"), published_tiles_file=d.get("published_tiles"), raw=d)
 
     def published_tiles(self) -> Optional[dict]:
@@ -202,27 +217,36 @@ class Product:
 
         return grid_system_of(tile, self.grid_systems)
 
-    def tile_path(self, grid_system: str, tile: str) -> Path:
+    def grid_dir(self, grid_system: str) -> str:
+        """The directory a grid system's tiles live in (conus/ for usgs_ard_conus)."""
         if grid_system not in self.grid_systems:
             raise LibraryError(f"{self.key}: grid system {grid_system!r} is not one of {self.grid_systems}")
-        return self.root / grid_system / _name(tile, "tile", self.key, _TILE_RE)
+        return self.grid_dirs.get(grid_system, grid_system)
+
+    def tile_rel(self, grid_system: str, tile: str) -> Path:
+        """A tile's path below the library root: <version>/<grid dir>/<tile>."""
+        return Path(self.version) / self.grid_dir(grid_system) / _name(tile, "tile", self.key, _TILE_RE)
+
+    def tile_path(self, grid_system: str, tile: str) -> Path:
+        return self.root.parent / self.tile_rel(grid_system, tile)
 
     def tiles(self) -> Iterator[tuple[str, str, Path]]:
         """(grid_system, tile, path) of every tile dataset present."""
         for g in self.grid_systems:
-            gdir = self.root / g
+            gdir = self.root / self.grid_dir(g)
             if not gdir.is_dir():
                 continue
             for p in sorted(gdir.iterdir()):
                 if p.is_dir() and not p.name.startswith(".") and (p / "manifest.json").exists():
                     yield g, p.name, p
 
-    def config_for_tile(self, tile: str, grid_system: str) -> dict:
-        """The DataLoader config that creates or updates this tile's dataset."""
+    def config_for_tile(self, tile: str, grid_system: str, out_dir=None) -> dict:
+        """The DataLoader config that creates or updates this tile's dataset
+        (in place, or in `out_dir`, a staging directory)."""
         d = copy.deepcopy(self.acquisition)
         d.setdefault("version", 1)
         d["aoi"] = {"tiles": [tile]}
-        d.setdefault("output", {})["dir"] = str(self.tile_path(grid_system, tile))
+        d.setdefault("output", {})["dir"] = str(out_dir or self.tile_path(grid_system, tile))
         return d
 
     def spec_identity(self, tile: str, grid_system: str) -> dict:
@@ -262,14 +286,22 @@ class Library:
     def admin_dir(self) -> Path:
         return self.root / ADMIN_DIR
 
+    def staging_dir(self, user: Optional[str] = None) -> Path:
+        """A maintainer's work area (staging/<user>/): same filesystem as the
+        tiles, so a finished tile moves into place with one rename."""
+        import getpass
+
+        return self.root / STAGING_DIR / _name(user or getpass.getuser(), "user", "staging", _TILE_RE)
+
     def products(self) -> list[Product]:
         out = []
-        pdir = self.root / PRODUCTS_DIR
-        for spec in sorted(pdir.glob(f"*/*/{PRODUCT_FILE}")) if pdir.is_dir() else []:
+        for spec in sorted(self.root.glob(f"*/{PRODUCT_FILE}")):
+            if spec.parent.name in RESERVED:
+                continue
             d = yaml.safe_load(spec.read_text()) or {}
             p = Product.from_dict(d, spec.parent, str(spec))
-            if (p.name, p.version) != (spec.parent.parent.name, spec.parent.name):
-                raise LibraryError(f"{spec}: says {p.key} but sits in {spec.parent.parent.name}/{spec.parent.name}")
+            if p.version != spec.parent.name:
+                raise LibraryError(f"{spec}: says version {p.version!r} but sits in {spec.parent.name}/")
             out.append(p)
         return out
 
@@ -300,13 +332,15 @@ def open_library(root) -> Library:
 
 
 def init_library(root, *, name: str, description: str, maintainers: list, contact: Optional[str] = None,
-                 group: Optional[str] = None) -> Library:
+                 group: Optional[str] = None, readme=None) -> Library:
     root = Path(root)
     if (root / LIBRARY_FILE).exists():
         raise LibraryError(f"{root}: already a library")
     root.mkdir(parents=True, exist_ok=True)
-    for d in (PRODUCTS_DIR, CATALOG_DIR, ADMIN_DIR):
+    for d in (CATALOG_DIR, STAGING_DIR, ADMIN_DIR):
         (root / d).mkdir(exist_ok=True)
+    if readme is not None:
+        atomic_write(root / README_FILE, Path(readme).read_text())
     info = {"name": name, "description": description, "layout_version": LAYOUT_VERSION,
             "maintainers": list(maintainers)}
     if contact:
@@ -326,8 +360,12 @@ def add_product(lib: Library, spec_path) -> Product:
     from data_loader.config import ConfigError, config_from_dict
 
     d = yaml.safe_load(Path(spec_path).read_text()) or {}
-    root = lib.root / PRODUCTS_DIR / str(d.get("product")) / str(d.get("version"))
+    root = lib.root / str(d.get("version"))
     p = Product.from_dict(d, root, str(spec_path))
+    other = [q for q in lib.products() if q.name != p.name]
+    if other:
+        raise LibraryError(f"{lib.root} holds product {other[0].name!r}; one library root per product family "
+                           f"(put {p.name!r} in its own root)")
     extra = Path(spec_path).parent / p.published_tiles_file if p.published_tiles_file else None
     if extra is not None and not extra.exists():
         raise LibraryError(f"{spec_path}: published_tiles file {extra} not found")
@@ -350,5 +388,5 @@ def add_product(lib: Library, spec_path) -> Product:
     atomic_write(root / PRODUCT_FILE, Path(spec_path).read_text())
     from imagery_library.permissions import apply_quietly
 
-    apply_quietly(lib, [root.parent, root / PRODUCT_FILE] + ([root / p.published_tiles_file] if extra else []))
+    apply_quietly(lib, [root, root / PRODUCT_FILE] + ([root / p.published_tiles_file] if extra else []))
     return p

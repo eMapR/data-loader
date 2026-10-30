@@ -35,6 +35,7 @@ OUTPUT = {"encoding": "native", "bands": ["red"], "qa_band": True}
 PRODUCT = {
     "product": "test_ard", "version": "c2", "title": "fake ARD for tests",
     "grid_systems": ["usgs_ard_conus", "usgs_ard_alaska"],
+    "grid_dirs": {"usgs_ard_conus": "conus", "usgs_ard_alaska": "alaska"},
     "acquisition": {"version": 1, "provider": "fake",
                     "sensors": [{"name": "landsat", "product_family": "usgs_c2_l2"}],
                     "time": {"start_date": "2023-07-01", "end_date": "2023-07-31"},
@@ -228,11 +229,17 @@ class CatalogQueryTests(unittest.TestCase):
                 build_catalog(self.lib, log=lambda m: None)
         cur = (self.lib.catalog_dir / "current")
         self.assertTrue(cur.is_symlink())
-        builds = [p for p in self.lib.catalog_dir.iterdir() if p.is_dir() and not p.is_symlink()]
+        builds = [p for p in (self.lib.catalog_dir / "builds").iterdir() if p.is_dir() and not p.is_symlink()]
         self.assertEqual(len(builds), 3)
         self.assertIn(cur.resolve(), builds)
         summary = json.loads((cur / "catalog.json").read_text())
         self.assertEqual((summary["tiles"], summary["observations"], summary["problems"]), (2, 6, []))
+        # researchers open the stable names; they follow `current`
+        import geopandas as gpd
+        import pandas as pd
+        self.assertEqual(json.loads((self.lib.catalog_dir / "catalog.json").read_text())["build"], cur.resolve().name)
+        self.assertEqual(sorted(gpd.read_parquet(self.lib.catalog_dir / "tiles.parquet")["grid"]), ["conus", "conus"])
+        self.assertEqual(len(pd.read_parquet(self.lib.catalog_dir / "observations.parquet")), 6)
 
     def test_metadata_only_import_is_catalogued_but_flagged(self):
         src = _archive(Path(self.tmp.name) / "meta_src")
@@ -242,7 +249,7 @@ class CatalogQueryTests(unittest.TestCase):
         build_catalog(lib, log=lambda m: None)
         r = lib.query(self._inside("h003v004"))
         self.assertEqual(len(r.observations), 3)
-        self.assertEqual(r.unavailable_tiles, ["usgs_ard_conus/h003v004"])
+        self.assertEqual(r.unavailable_tiles, ["conus/h003v004"])
 
     def test_library_files_are_strict(self):
         (self.lib.root / "LIBRARY.yaml").write_text(
@@ -524,3 +531,123 @@ class PermissionsSupersededBackupTests(unittest.TestCase):
         self.assertFalse(any(p.endswith(".tif") for p in meta))
         for p in meta + irr + img:
             self.assertTrue((self.lib.root / p).is_file(), p)
+
+
+@unittest.skipUnless(HAVE_GEO, "needs the library extra (geopandas, pyarrow)")
+class LayoutStagingTests(unittest.TestCase):
+    """Layout 2: <root>/<version>/<grid dir>/<tile>, staging/<user>/, and
+    hard-linked imports that leave the source archive's files as they are."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        readme = Path(self.tmp.name) / "README.md"
+        readme.write_text("# Test dataset\n")
+        self.lib = init_library(Path(self.tmp.name) / "Landsat-ARD", name="t", description="t", maintainers=["m"],
+                                readme=readme)
+        sp = Path(self.tmp.name) / "spec.yaml"
+        sp.write_text(yaml.safe_dump(PRODUCT))
+        self.product = add_product(self.lib, sp)
+
+    def test_layout_is_version_grid_dir_tile(self):
+        root = self.lib.root
+        self.assertEqual(sorted(p.name for p in root.iterdir()),
+                         ["LIBRARY.yaml", "README.md", "admin", "c2", "catalog", "staging"])
+        self.assertEqual(self.product.tile_path("usgs_ard_conus", "h003v004"), root / "c2" / "conus" / "h003v004")
+        self.assertEqual(self.product.tile_path("usgs_ard_alaska", "AK_h021v008"),
+                         root / "c2" / "alaska" / "AK_h021v008")  # region prefix kept: h/v repeat across grids
+        cfg = config_from_dict(self.product.config_for_tile("h003v004", "usgs_ard_conus"))
+        self.assertEqual(cfg.output.dir, str(root / "c2" / "conus" / "h003v004"))
+
+    def test_reserved_names_and_one_product_family_per_root(self):
+        d = Path(self.tmp.name)
+        for version in ("catalog", "staging", "admin"):
+            (d / "bad.yaml").write_text(yaml.safe_dump({**PRODUCT, "version": version}))
+            with self.subTest(version=version), self.assertRaisesRegex(LibraryError, "reserved"):
+                add_product(self.lib, d / "bad.yaml")
+        (d / "other.yaml").write_text(yaml.safe_dump({**PRODUCT, "product": "sentinel2_l2a", "version": "v1"}))
+        with self.assertRaisesRegex(LibraryError, "one library root per product family"):
+            add_product(self.lib, d / "other.yaml")
+        (d / "dup.yaml").write_text(yaml.safe_dump(
+            {**PRODUCT, "version": "c3", "grid_dirs": {"usgs_ard_conus": "x", "usgs_ard_alaska": "x"}}))
+        with self.assertRaisesRegex(LibraryError, "same directory"):
+            add_product(self.lib, d / "dup.yaml")
+
+    def _stage(self, tile="h003v004", **provider_kw):
+        from imagery_library.acquire import tiles_needed
+        r = tiles_needed(self.lib, self.product, tiles=[tile])[0]
+        staged = self.lib.staging_dir() / self.product.tile_rel(r["grid_system"], r["tile"])
+        run_with(_provider(july(3), **provider_kw),
+                 config_from_dict(self.product.config_for_tile(tile, "usgs_ard_conus", out_dir=staged)))
+        return staged
+
+    def test_new_tile_is_staged_verified_then_moved_into_place(self):
+        import getpass
+        from imagery_library.acquire import promote, tiles_needed
+        staged = self._stage()
+        self.assertEqual(staged.parts[-5:-3], ("staging", getpass.getuser()))
+        needed = tiles_needed(self.lib, self.product, tiles=["h003v004"])
+        self.assertEqual((needed[0]["held"], needed[0]["staged_by"]), (False, [getpass.getuser()]))
+        build_catalog(self.lib, log=lambda m: None)
+        self.assertEqual(json.loads((self.lib.catalog_dir / "catalog.json").read_text())["tiles"], 0)  # not yet
+        self.assertTrue(promote(self.lib, self.product, "usgs_ard_conus", "h003v004", staged, log=lambda m: None))
+        dest = self.product.tile_path("usgs_ard_conus", "h003v004")
+        self.assertFalse(staged.exists())
+        self.assertEqual(list(self.lib.staging_dir().parent.iterdir()), [])  # empty staging folders removed
+        self.assertEqual(open_dataset(dest).verify(), [])
+        build_catalog(self.lib, log=lambda m: None)
+        import geopandas as gpd
+        t = gpd.read_parquet(self.lib.catalog_dir / "tiles.parquet").set_index("tile")
+        self.assertEqual(t.loc["h003v004", "verification_state"], "verified")  # the staging verify counts
+        self.assertEqual(t.loc["h003v004", "path"], "c2/conus/h003v004")
+        # the moved dataset is DataLoader's own: an update resumes it in place
+        cfg = self.product.config_for_tile("h003v004", "usgs_ard_conus")
+        cfg["time"]["end_date"] = "2023-08-31"
+        p = _provider(july(3) + [FakeScene(id="scene-aug", date=date(2023, 8, 2))])
+        run_with(p, config_from_dict(cfg))
+        self.assertEqual(p.reads, ["scene-aug"])
+
+    def test_incomplete_staged_tile_is_not_promoted(self):
+        from imagery_library.acquire import promote
+        staged = self._stage(fail={"scene-1": -1})
+        self.assertFalse(promote(self.lib, self.product, "usgs_ard_conus", "h003v004", staged, log=lambda m: None))
+        self.assertTrue(staged.exists())
+        self.assertFalse(self.product.tile_path("usgs_ard_conus", "h003v004").exists())
+
+    def test_corrupt_staged_tile_is_not_promoted(self):
+        from imagery_library.acquire import promote
+        staged = self._stage()
+        tif = next(staged.rglob("*.tif"))
+        data = bytearray(tif.read_bytes())
+        data[-1] ^= 0xFF
+        tif.write_bytes(bytes(data))
+        self.assertFalse(promote(self.lib, self.product, "usgs_ard_conus", "h003v004", staged, log=lambda m: None))
+        self.assertTrue(staged.exists())
+        self.assertFalse(self.product.tile_path("usgs_ard_conus", "h003v004").exists())
+
+    def test_hardlink_import_leaves_source_permissions_until_names_are_retired(self):
+        import stat
+        from imagery_library.permissions import apply
+        src = _archive(Path(self.tmp.name) / "project_archive")
+        tifs = sorted(src.rglob("*.tif"))
+        for t in tifs:
+            t.chmod(0o664)  # as on the production archives
+        before = {t: (stat.S_IMODE(t.stat().st_mode), t.stat().st_mtime_ns, t.read_bytes()) for t in tifs}
+        import_archive(self.lib, self.product, src, mode="hardlink", log=lambda m: None)
+        rep = apply(self.lib)  # also what `permissions --fix` does
+        linked = [f for f in (self.lib.root / "c2").rglob("*") if f.is_file() and f.stat().st_nlink > 1]
+        self.assertGreaterEqual(len(linked), len(tifs))
+        self.assertEqual(rep.shared, len(linked))
+        for t, (mode, mtime, data) in before.items():
+            self.assertEqual((stat.S_IMODE(t.stat().st_mode), t.stat().st_mtime_ns, t.read_bytes()),
+                             (mode, mtime, data), t)
+            self.assertEqual(t.stat().st_nlink, 2)
+        self.assertEqual(list(self.lib.staging_dir().iterdir()), [])  # import staging cleaned up
+        # retirement: the old names go; the library's files are sealed on the next fix
+        import shutil
+        shutil.rmtree(src)
+        rep = apply(self.lib)
+        # left: only source records both test tiles share (one fake item per scene; ARD items are per tile)
+        self.assertTrue(all("/metadata/" in str(f) for f in linked if f.stat().st_nlink > 1))
+        for t in (self.lib.root / "c2").rglob("*.tif"):
+            self.assertEqual(stat.S_IMODE(t.stat().st_mode), 0o444)
