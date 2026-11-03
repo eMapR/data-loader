@@ -108,7 +108,7 @@ Use the catalog. You never need to know tile ids or project names.
 ```python
 from imagery_library import open_library
 
-lib = open_library("/vol/v1/Landsat-ARD")
+lib = open_library("/home/server/datasets/Landsat-ARD")
 r = lib.query("my_aoi.geojson", start="2000-06-01", end="2020-09-30",
               platforms=["landsat-5", "landsat-7"], months=[6, 7, 8, 9])
 print(r.summary())    # tiles, counts, coverage, anything missing
@@ -117,7 +117,7 @@ r.paths()             # GeoTIFF paths to read
 ```
 
 From the shell:
-`imagery-library query /vol/v1/Landsat-ARD my_query.yaml --out files.csv`
+`imagery-library query /home/server/datasets/Landsat-ARD my_query.yaml --out files.csv`
 (see DataLoader's `docs/library.md`). Any tool that reads GeoParquet
 (GeoPandas, QGIS, DuckDB, R `sfarrow`) can open `catalog/tiles.parquet` and
 `catalog/observations.parquet` directly. To read both from one consistent
@@ -178,7 +178,7 @@ Use `verified_only=True` to read only checksum-verified files.
 |---|---|
 | Maintainers (acquire, verify, catalog) | clarype (eMapR, OSU). **TODO (D6): other maintainers** |
 | Contact for requests and problems | **TODO (D6): contact address** |
-| Storage | `/vol/v1` on Iowa (eMapR). Planned move to shared research storage (Thomas) |
+| Storage | `/home/server/datasets/Landsat-ARD` (shared research storage, provisioned by Thomas); first assembled on `/vol/v1` on Islay (eMapR) |
 | Software | DataLoader and `imagery-library`, https://github.com/eMapR/data-loader |
 
 To request a tile or report a problem, contact a maintainer. The design

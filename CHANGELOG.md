@@ -32,6 +32,13 @@
   the dataset README (`library/landsat_ard/README.md`). Decisions:
   `docs/library-architecture.md`. Layout 1 (`products/...`, proof of
   concept only) is no longer read.
+- **Library transfer to another filesystem** (`library/transfer_library.sh`,
+  runbook `docs/library-transfer.md`): record the source, copy with rsync
+  into the destination's staging, check every file end to end (sizes and
+  mtimes, non-imagery SHA-256, full imagery verify, catalog, per-tile
+  counts), then promote by renames. `promote` now keeps the
+  maintainer's own `staging/<user>` folder (on shared storage `staging/`
+  can be admin-owned).
 - **Native Alaska and Hawaii ARD grids.** `aoi.tiles` now takes
   region-qualified USGS ARD tile ids: `AK_h021v008` (Alaska grid),
   `HI_h001v001` (Hawaii), `CU_h003v004` (CONUS). Each region has its own

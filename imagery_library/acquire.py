@@ -113,7 +113,9 @@ def promote(lib: Library, product: Product, grid_system: str, tile: str, staged:
     dest.parent.mkdir(parents=True, exist_ok=True)
     os.rename(staged, dest)
     fsync_dir(dest.parent)
-    for d in list(staged.parents)[:3]:  # empty <grid dir>/<version>/<user> staging folders
+    # Empty <grid dir>/<version> staging folders. staging/<user> stays: on shared storage
+    # staging/ may be admin-owned, so a maintainer can't recreate their own folder.
+    for d in list(staged.parents)[:2]:
         try:
             d.rmdir()  # only if empty
         except OSError:

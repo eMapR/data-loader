@@ -593,7 +593,8 @@ class LayoutStagingTests(unittest.TestCase):
         self.assertTrue(promote(self.lib, self.product, "usgs_ard_conus", "h003v004", staged, log=lambda m: None))
         dest = self.product.tile_path("usgs_ard_conus", "h003v004")
         self.assertFalse(staged.exists())
-        self.assertEqual(list(self.lib.staging_dir().parent.iterdir()), [])  # empty staging folders removed
+        self.assertEqual(list(self.lib.staging_dir().iterdir()), [])  # empty staging folders removed
+        self.assertTrue(self.lib.staging_dir().is_dir())  # but staging/<user> is kept
         self.assertEqual(open_dataset(dest).verify(), [])
         build_catalog(self.lib, log=lambda m: None)
         import geopandas as gpd

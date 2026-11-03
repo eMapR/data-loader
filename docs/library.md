@@ -27,7 +27,7 @@ engine internals. Projects hold no imagery and no acquisition settings.
 ## Layout
 
 Layout 2 (decisions and reasons: [library-architecture.md](library-architecture.md)).
-One root per product family; on Iowa: `/vol/v1/Landsat-ARD`.
+One root per product family: `/home/server/datasets/Landsat-ARD` (shared storage), assembled first on Islay at `/vol/v1/Landsat-ARD`.
 
 ```
 Landsat-ARD/

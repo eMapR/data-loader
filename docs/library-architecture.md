@@ -18,7 +18,7 @@ whoever asked for it first. A second project needing the same tile would
 download it again, and nobody outside eMapR can find the data. The goal is
 a universal research dataset, organised by what the data *is*, that
 eMapR and other researchers query by area and date. It runs on `/vol/v1`
-on Iowa first and moves to shared research storage later.
+on Islay first and moves to shared research storage later.
 
 ## Decisions
 
@@ -128,26 +128,56 @@ on Iowa first and moves to shared research storage later.
   Backups and rsync of `/vol/v1` must preserve hard links (`-H`) while
   both names exist.
 
-### 6. Moving to shared storage later
+### 6. Moving to shared storage (decided 2026-11-02)
 
-The root is self-contained: relative paths everywhere (catalog, tile
-datasets, relative symlinks). After retirement each file has one name.
+The permanent library is `/home/server/datasets/Landsat-ARD` (NFS 4.2,
+provisioned by Thomas). The root is self-contained: relative paths
+everywhere (catalog, tile datasets, relative symlinks), and DataLoader
+ignores the absolute `request.output.dir` in a moved manifest. Runbook:
+[library-transfer.md](library-transfer.md).
 
-1. On `/vol/v1`: full verify, catalog, permissions sealed, old names retired.
-2. `rsync -aHAX --numeric-ids /vol/v1/Landsat-ARD/ DEST/Landsat-ARD/` (about 27 h for
-   10.7 TB at 1 Gb/s; about 38 h with Tanana).
-3. On the destination: `imagery-library verify` (full SHA-256, about 35 h over 1 Gb/s
-   NFS), `imagery-library catalog`, `imagery-library permissions --fix`.
-   Set `DATALOADER_LOCK_DIR=DEST/Landsat-ARD/admin/locks` in the
-   maintainers' environment files.
-4. Delete the `/vol/v1` copy only after step 3 passes.
+- **Copy, then promote.** The library is copied into
+  `staging/<maintainer>/Landsat-ARD` on the destination, checked there,
+  then its entries are renamed into the permanent root (`LIBRARY.yaml`
+  last). Nobody can open a half-copied library at the permanent path, an
+  abandoned copy leaves it untouched, and the renames take seconds.
+- **The copy is independent of `/vol/v1`.** It is a real copy (no hard
+  links cross filesystems), so it can run before the project archives
+  are retired. `/vol/v1/Landsat-ARD` and the project archives stay as
+  they are until a separate decision.
+- **rsync, without owner, group or ACLs.** `-rlptH --chmod=g-w --fsync`:
+  contents, structure, symlinks and modification times are kept. Owner
+  and group become the copying maintainer's (the source group `trenders`
+  doesn't exist for them there); group write is dropped. The `/vol/v1`
+  ACLs only mirror the mode bits and an NFSv4 mount can't store POSIX
+  ACLs. `staging/` is not copied. `imagery-library permissions --fix`
+  applies the policy once the maintainers' group exists.
+- **Verification is end to end**, not trusted to rsync: every file's
+  size and mtime, the SHA-256 of every non-imagery file (recorded at the
+  source before the copy), a full `imagery-library verify` of every image
+  against the SHA-256 recorded when it was written, a catalog rebuild,
+  and per-tile counts equal to the source's (`library/transfer_library.sh`).
+- **After the move**, updates and new tiles (Tanana) are acquired straight
+  into the shared root: new tiles in `staging/<maintainer>/` on the same
+  filesystem, verified, then renamed into place. `promote` keeps
+  `staging/<maintainer>` (on the shared storage `staging/` is
+  admin-owned). `DATALOADER_LOCK_DIR=/home/server/datasets/Landsat-ARD/admin/locks`
+  in the maintainers' environment files puts the one-run-per-account
+  lock where every machine sees it (`flock` works across NFS clients:
+  `local_lock=none`, tested 2026-11-02).
 
-The destination must provide POSIX semantics: atomic rename, fsync,
-`flock` across clients (NFSv4 with server-side locks), symlinks and hard
-links within the volume. A **hard** mount if maintainers write over NFS
-(a soft mount can drop writes on timeout). About 20 TB now plus about
-1 TB per year. A maintainers' group. A daily metadata backup
-(`imagery-library backup-list --tier metadata`).
+Requirements, as checked on 2026-11-02: atomic rename, fsync, `flock`,
+symlinks, hard links, setgid and mtimes all work; 467 TB free, no quota
+reported; 1 Gb/s from Islay (114-117 MB/s raw, about 85 MB/s for rsync).
+Still needed from the storage admins:
+- **A `hard` mount on every machine that writes** (Islay's fstab says
+  `soft`). With `soft`, a server or network outage of more than about
+  6 minutes (`timeo=600,retrans=2`) turns into I/O errors in the middle
+  of writes: failed copies, and for acquisitions half-finished updates
+  and lost locks. `hard` waits for the server instead.
+- A maintainers' group owning the root and `staging/`.
+- Backups or snapshots of the export, or at least the daily metadata
+  backup (`imagery-library backup-list --tier metadata`).
 
 ### 7. Who maintains it (D6: open)
 
