@@ -126,8 +126,9 @@ PY
     else
         die "tile tables differ"
     fi
-    awk '$9 != "verified" {bad++} END {if (bad) {print bad " tile(s) not verified"; exit 1}}' "$kit/tiles.dest.txt" \
-        || die "not every tile is verified"
+    # the verification column is last; the acquisition column can hold spaces ("incomplete (1 failed)")
+    "$IL" tiles "$dest" | awk 'NR > 1 && NF >= 9 {n++; if ($0 !~ / verified [0-9]{4}-[0-9]{2}-[0-9]{2} *$/) bad++}
+        END {if (bad || !n) {print bad " tile(s) not verified"; exit 1}}' || die "not every tile is verified"
     echo "$dest" > "$kit/CHECK_PASSED"
     say "CHECK PASSED: $dest"
 }
