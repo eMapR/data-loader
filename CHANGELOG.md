@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 (2026-11-06)
+
+Superseded processing versions, one run per USGS account, and the
+shared imagery library (layout 2, transfer to shared storage).
+Manifest schema 1.2 is additive; 1.0 and 1.1 datasets are read and
+resumed as is, and are written as 1.2 at their next run.
 
 ### Added
 - **`superseded` status (output contract 1.2).** USGS keeps listing an ARD

@@ -33,9 +33,9 @@ and offset, missing acquisitions, reading while a run is in progress), see
   "dataset": {
     "created": "2026-10-08T...", "updated": "...",
     "complete": true,                 // nothing pending or failed
-    "dataloaderVersion": "1.1.0", "gitCommit": "...", "gitDirty": false,   // software of the latest run
+    "dataloaderVersion": "1.2.0", "gitCommit": "...", "gitDirty": false,   // software of the latest run
     "runs": [                         // every run into this directory, oldest first (1.1)
-      {"started": "...", "finished": "...", "dataloaderVersion": "1.1.0", "gitCommit": "...",
+      {"started": "...", "finished": "...", "dataloaderVersion": "1.2.0", "gitCommit": "...",
        "gitDirty": false, "acquired": 812, "failed": 0}
       // "finished": null and no counts: the run was killed; "interrupted": true: stopped with Ctrl-C
     ],
@@ -129,7 +129,7 @@ per grid), sorted by sensor, grid and date. A **scene** row:
     "source_metadata_ref": "metadata/usgs_ard/LT05_CU_003004_19900102_20210423_02_SR.json"
   },
   "sourceMetadata": "metadata/usgs_ard/LT05_CU_003004_19900102_20210423_02_SR.json",
-  "software": {"dataloaderVersion": "1.1.0", "gitCommit": "...", "gitDirty": false},   // what wrote this row
+  "software": {"dataloaderVersion": "1.2.0", "gitCommit": "...", "gitDirty": false},   // what wrote this row
   "attempts": 1, "updated": "...",
   "timing": {"readS": 11.2, "totalS": 19.8}
 }
